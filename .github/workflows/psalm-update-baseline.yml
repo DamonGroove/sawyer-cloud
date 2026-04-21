@@ -1,0 +1,47 @@
+name: Update Psalm baseline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '5 4 * * *'
+
+jobs:
+  update-psalm-baseline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up php
+        uses: shivammathur/setup-php@7bf05c6b704e0b9bfee22300130a31b5ea68d593 # v2
+        with:
+          php-version: 8.5
+          extensions: apcu
+          coverage: none
+          ini-file: development
+
+      - name: Run script
+        run: |
+          set -x
+          cd php
+          composer install
+          composer run psalm:update-baseline
+          git clean -f lib/composer
+          git checkout composer.json composer.lock lib/composer
+        continue-on-error: true
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Update psalm baseline
+          committer: GitHub <noreply@github.com>
+          author: nextcloud-command <nextcloud-command@users.noreply.github.com>
+          signoff: true
+          branch: automated/noid/psalm-baseline-update
+          title: '[Automated] Update psalm-baseline.xml'
+          milestone: next
+          body: |
+            Auto-generated update psalm-baseline.xml with fixed psalm warnings
+          labels: |
+            3. to review, dependencies

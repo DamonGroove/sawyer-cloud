@@ -1,0 +1,65 @@
+name: dependency-updates
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron:  '00 12 * * *'
+
+jobs:
+  dependency_updates:
+    name: Run dependency update script
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: shivammathur/setup-php@7bf05c6b704e0b9bfee22300130a31b5ea68d593 # v2
+      with:
+        php-version: 8.5
+        extensions: apcu
+    - name: Run dependency update script
+      run: |
+        set -x
+        cd ./php
+        composer update --with-all-dependencies
+        # Disable dependency updates for now
+        # set +e
+        # ALL_LINES="$(composer outdated | grep -v "^$\|Direct dependencies\|Everything up to date\|Transitive dependencies")"
+        # set -e
+        # while [ -n "$ALL_LINES" ]; do
+        #   CURRENT_LINE="$(echo "$ALL_LINES" | head -1)"
+        #   composer require "$(echo "$CURRENT_LINE" | awk '{print $1}')" "^$(echo "$CURRENT_LINE" | awk '{print $4}')" --with-all-dependencies
+        #   ALL_LINES="$(echo "$ALL_LINES" | sed '1d')"
+        # done
+        # echo "outdated dependencies:
+        # $(composer outdated)"
+    - name: Update apcu
+      run: |
+        # APCU
+        apcu_version="$(
+          git ls-remote --tags https://github.com/krakjoe/apcu.git \
+            | cut -d/ -f3 \
+            | grep -viE -- 'rc|b' \
+            | sed -E 's/^v//' \
+            | sort -V \
+            | tail -1
+        )"
+        sed -i "s|pecl install APCu.*\;|pecl install APCu-$apcu_version\;|" ./Containers/mastercontainer/Dockerfile
+
+        # CADDY_REMOTE_HOST_HASH
+        CADDY_REMOTE_HOST_HASH="$(
+          git ls-remote https://github.com/muety/caddy-remote-host master \
+            | cut -f1 \
+            | tail -1
+        )"
+        sed -i "s|^ARG CADDY_REMOTE_HOST_HASH.*$|ARG CADDY_REMOTE_HOST_HASH=$CADDY_REMOTE_HOST_HASH|" ./Containers/mastercontainer/Dockerfile
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v7
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: php dependency updates
+        signoff: true
+        title: PHP dependency updates
+        body: Automated php dependency updates since dependabot does not support grouped updates
+        labels: dependencies, 3. to review
+        milestone: next
+        branch: aio-dependency-update
