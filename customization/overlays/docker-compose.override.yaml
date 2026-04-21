@@ -12,8 +12,12 @@
 #      the flavor folder, and the branding apps folder read-only into the
 #      mastercontainer so bootstrap-aio can read them.
 #   3. Passes customer identity + deployment mode + AIO port/binding via
-#      environment (env_file loads flavor.env and customer.env in that
-#      order — customer overrides flavor).
+#      environment. The caller (deploy-staging.sh, first-boot.sh, mgmt-ctl)
+#      is expected to have sourced flavor.env → customer.env → decrypted
+#      secrets into its shell before invoking compose, so ${VAR} references
+#      resolve against the caller's environment. env_file is not used here
+#      because docker compose's include-based path resolution is fragile
+#      for relative env_file paths across nested compose files.
 #   4. Adds a `customer-agent` sidecar (one of our community containers;
 #      this override turns it on unconditionally for every deploy, while
 #      container-level toggles in AIO_COMMUNITY_CONTAINERS are how the
@@ -28,12 +32,15 @@
 services:
   nextcloud-aio-mastercontainer:
     image: ghcr.io/sawyer-cloud/aio-base:${AIO_IMAGE_TAG:-latest}
-    env_file:
-      - customization/flavors/${CUSTOMER_FLAVOR:-default}/flavor.env
-      - ../customers/${CUSTOMER_NAME:?CUSTOMER_NAME required}/customer.env
+    # env_file intentionally omitted — compose's include-based project
+    # directory resolution is fragile for env_file paths. The caller
+    # (scripts/deploy-staging.sh, scripts/packer/files/first-boot.sh,
+    # mgmt-ctl's future deploy runner) sources flavor.env → customer.env
+    # → decrypted secrets into the shell before invoking `docker compose up`.
+    # Compose picks values up from the shell env via ${VAR:-default}.
     environment:
       # Identity and mode — the bootstrap-aio entrypoint reads these.
-      CUSTOMER_NAME: ${CUSTOMER_NAME}
+      CUSTOMER_NAME: ${CUSTOMER_NAME:?CUSTOMER_NAME required}
       CUSTOMER_FLAVOR: ${CUSTOMER_FLAVOR:-default}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-first-boot}
       CUSTOMIZATION_ROOT: /customization
@@ -53,9 +60,9 @@ services:
       NEXTCLOUD_TRUSTED_CACERTS_DIR: ${NEXTCLOUD_TRUSTED_CACERTS_DIR:-}
       AIO_COMMUNITY_CONTAINERS: ${AIO_COMMUNITY_CONTAINERS:-}
     volumes:
-      - customization/customers/${CUSTOMER_NAME}:/customization/customers/${CUSTOMER_NAME}:ro
-      - customization/flavors/${CUSTOMER_FLAVOR:-default}:/customization/flavors/${CUSTOMER_FLAVOR:-default}:ro
-      - customization/apps:/customization/apps:ro
+      - ./customization/customers/${CUSTOMER_NAME}:/customization/customers/${CUSTOMER_NAME}:ro
+      - ./customization/flavors/${CUSTOMER_FLAVOR:-default}:/customization/flavors/${CUSTOMER_FLAVOR:-default}:ro
+      - ./customization/apps:/customization/apps:ro
 
   customer-agent:
     image: ghcr.io/sawyer-cloud/aio-base:${AIO_IMAGE_TAG:-latest}
@@ -65,8 +72,7 @@ services:
     restart: unless-stopped
     depends_on:
       - nextcloud-aio-mastercontainer
-    env_file:
-      - customization/customers/${CUSTOMER_NAME}/customer.env
+    # env_file intentionally omitted — see note on mastercontainer service.
     environment:
       MGMT_SERVER_URL: ${MGMT_SERVER_URL:?MGMT_SERVER_URL required}
       CUSTOMER_NAME: ${CUSTOMER_NAME}
