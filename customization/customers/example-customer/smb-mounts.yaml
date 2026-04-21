@@ -1,0 +1,26 @@
+# customization/customers/example-customer/smb-mounts.yaml
+#
+# SMB / Windows file share mounts for this customer. Consumed by
+# scripts/apply-smb.py (invoked by bootstrap.sh per CLAUDE.md §3.8).
+#
+# Credentials come from customer.env.secret.age — NEVER put passwords
+# here. The env key convention is SMB_<NAME>_USER / SMB_<NAME>_PASS
+# (or SMB_<NAME>_KEYTAB_PATH for Kerberos), where <NAME> is the mount
+# name uppercased and non-alphanumerics replaced with `_`.
+
+mounts:
+  # Sample entry; remove or replace for real customers.
+  - name: example-share
+    share_host: fileserver.example.internal
+    share_path: /CustomerShare
+    mount_point_in_nc: /CustomerFiles
+    auth_mechanism: password::sessioncredentials  # use the user's NC login
+    scope: admin  # admin | user | group
+    # scope_target: required when scope is user or group
+    options:
+      # Must be ≥ 2.0 per CLAUDE.md §3.8 reminder (a).
+      smb_version: "2.0"
+      # SMB-backed files take a latency hit when ClamAV scans them (CLAUDE.md
+      # §3.8 reminder (d)). Disable AV scanning on this mount if the remote
+      # share is already AV-scanned by the customer's IT.
+      enable_antivirus: true

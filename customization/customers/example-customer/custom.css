@@ -1,0 +1,23 @@
+/*
+ * customization/customers/example-customer/custom.css
+ *
+ * Customer-level CSS overrides. Loaded AFTER the flavor's custom.css by
+ * bootstrap.sh (CLAUDE.md §3.3) and wins on conflicting selectors.
+ *
+ * Real customers rarely need anything in here; the flavor CSS + the
+ * `CUSTOMER_PRIMARY_COLOR` env var cover the common branding cases.
+ */
+
+:root {
+    /* Match CUSTOMER_PRIMARY_COLOR=#2A6F97 from customer.env so CSS
+       selectors that need a hex literal can reach it. */
+    --sawyer-primary: #2A6F97;
+    --sawyer-primary-ink: #ffffff;
+}
+
+/* Example: tighten the app menu's hover affordance for this customer. */
+#appmenu li:hover,
+#appmenu li.active {
+    background-color: var(--sawyer-primary);
+    color: var(--sawyer-primary-ink);
+}
