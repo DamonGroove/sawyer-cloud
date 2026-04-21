@@ -1,0 +1,85 @@
+{{- if eq .Values.FULLTEXTSEARCH_ENABLED "yes" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.version: 1.38.0 (a8f5d1cbd)
+  labels:
+    io.kompose.service: nextcloud-aio-fulltextsearch
+  name: nextcloud-aio-fulltextsearch
+  namespace: "{{ .Values.NAMESPACE }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: nextcloud-aio-fulltextsearch
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.version: 1.38.0 (a8f5d1cbd)
+      labels:
+        io.kompose.service: nextcloud-aio-fulltextsearch
+    spec:
+      initContainers:
+        - name: init-volumes
+          image: ghcr.io/nextcloud-releases/aio-alpine:20260409_094910
+          command:
+            - chmod
+            - "777"
+            - /nextcloud-aio-elasticsearch
+          volumeMounts:
+            - name: nextcloud-aio-elasticsearch
+              mountPath: /nextcloud-aio-elasticsearch
+      containers:
+        - env:
+            - name: ES_JAVA_OPTS
+              value: "{{ .Values.FULLTEXTSEARCH_JAVA_OPTIONS | default "-Xms512M -Xmx512M" }}"
+            - name: FULLTEXTSEARCH_PASSWORD
+              value: "{{ .Values.FULLTEXTSEARCH_PASSWORD }}"
+            - name: TZ
+              value: "{{ .Values.TIMEZONE }}"
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: cluster.name
+              value: nextcloud-aio
+            - name: discovery.type
+              value: single-node
+            - name: http.port
+              value: "9200"
+            - name: logger.level
+              value: WARN
+            - name: xpack.license.self_generated.type
+              value: basic
+            - name: xpack.security.enabled
+              value: "false"
+          image: ghcr.io/nextcloud-releases/aio-fulltextsearch:20260409_094910
+          readinessProbe:
+            exec:
+              command:
+                - /healthcheck.sh
+            failureThreshold: 5
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /healthcheck.sh
+            failureThreshold: 5
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: nextcloud-aio-fulltextsearch
+          ports:
+            - containerPort: 9200
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /usr/share/elasticsearch/data
+              name: nextcloud-aio-elasticsearch
+      volumes:
+        - name: nextcloud-aio-elasticsearch
+          persistentVolumeClaim:
+            claimName: nextcloud-aio-elasticsearch
+{{- end }}
