@@ -1,0 +1,84 @@
+# customization/overlays/docker-compose.override.yaml
+#
+# Overlays the upstream AIO compose (upstream/compose.yaml, an unmodified
+# git subtree) with our customizations. Pulled in by the repo-root
+# compose.yaml via `include:`.
+#
+# What this overlay does:
+#   1. Pins `nextcloud-aio-mastercontainer` to our sawyer-cloud aio-base
+#      image (built by scripts/build-base-image.sh), defaulting to :latest
+#      but overridable via AIO_IMAGE_TAG for customer-specific pinning.
+#   2. Mounts the customer folder (customization/customers/<n>/),
+#      the flavor folder, and the branding apps folder read-only into the
+#      mastercontainer so bootstrap-aio can read them.
+#   3. Passes customer identity + deployment mode + AIO port/binding via
+#      environment (env_file loads flavor.env and customer.env in that
+#      order — customer overrides flavor).
+#   4. Adds a `customer-agent` sidecar (one of our community containers;
+#      this override turns it on unconditionally for every deploy, while
+#      container-level toggles in AIO_COMMUNITY_CONTAINERS are how the
+#      operator turns on litellm, ollama, etc).
+#
+# Relative paths are resolved from the project root (the directory of
+# the top-level compose.yaml), not from this overlay's own directory. That
+# is docker compose's documented behavior when files are pulled in via
+# `include:` — the project directory anchors path resolution across all
+# included files.
+
+services:
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/sawyer-cloud/aio-base:${AIO_IMAGE_TAG:-latest}
+    env_file:
+      - customization/flavors/${CUSTOMER_FLAVOR:-default}/flavor.env
+      - ../customers/${CUSTOMER_NAME:?CUSTOMER_NAME required}/customer.env
+    environment:
+      # Identity and mode — the bootstrap-aio entrypoint reads these.
+      CUSTOMER_NAME: ${CUSTOMER_NAME}
+      CUSTOMER_FLAVOR: ${CUSTOMER_FLAVOR:-default}
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-first-boot}
+      CUSTOMIZATION_ROOT: /customization
+      # AIO reverse-proxy wiring. Customers behind Cloudflare Tunnel or a
+      # local reverse proxy need APACHE_PORT set on the mastercontainer.
+      APACHE_PORT: ${APACHE_PORT:-11000}
+      APACHE_IP_BINDING: ${APACHE_IP_BINDING:-127.0.0.1}
+      SKIP_DOMAIN_VALIDATION: ${SKIP_DOMAIN_VALIDATION:-false}
+      # Pass AIO-tunable env vars only when the customer sets them; empty
+      # means "use upstream default" and NOT an empty string.
+      NEXTCLOUD_UPLOAD_LIMIT: ${NEXTCLOUD_UPLOAD_LIMIT:-}
+      NEXTCLOUD_MAX_TIME: ${NEXTCLOUD_MAX_TIME:-}
+      NEXTCLOUD_MEMORY_LIMIT: ${NEXTCLOUD_MEMORY_LIMIT:-}
+      TALK_PORT: ${TALK_PORT:-}
+      NEXTCLOUD_ADDITIONAL_APKS: ${NEXTCLOUD_ADDITIONAL_APKS:-}
+      NEXTCLOUD_ADDITIONAL_PHP_EXTENSIONS: ${NEXTCLOUD_ADDITIONAL_PHP_EXTENSIONS:-}
+      NEXTCLOUD_TRUSTED_CACERTS_DIR: ${NEXTCLOUD_TRUSTED_CACERTS_DIR:-}
+      AIO_COMMUNITY_CONTAINERS: ${AIO_COMMUNITY_CONTAINERS:-}
+    volumes:
+      - customization/customers/${CUSTOMER_NAME}:/customization/customers/${CUSTOMER_NAME}:ro
+      - customization/flavors/${CUSTOMER_FLAVOR:-default}:/customization/flavors/${CUSTOMER_FLAVOR:-default}:ro
+      - customization/apps:/customization/apps:ro
+
+  customer-agent:
+    image: ghcr.io/sawyer-cloud/aio-base:${AIO_IMAGE_TAG:-latest}
+    container_name: nextcloud-aio-customer-agent
+    entrypoint: ["/usr/local/bin/customer-agent"]
+    command: ["run"]
+    restart: unless-stopped
+    depends_on:
+      - nextcloud-aio-mastercontainer
+    env_file:
+      - customization/customers/${CUSTOMER_NAME}/customer.env
+    environment:
+      MGMT_SERVER_URL: ${MGMT_SERVER_URL:?MGMT_SERVER_URL required}
+      CUSTOMER_NAME: ${CUSTOMER_NAME}
+      AGENT_STATE_DIR: /var/lib/customer-agent
+    volumes:
+      # State (mTLS cert + last-seen command ID) survives container restarts.
+      - customer_agent_state:/var/lib/customer-agent
+      # Agent does NOT mount the docker socket (MANAGEMENT_SERVER.md §4.5).
+      # All orchestration goes through the mastercontainer's API.
+    networks:
+      - default
+
+volumes:
+  customer_agent_state:
+    name: customer_agent_state

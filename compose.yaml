@@ -1,0 +1,31 @@
+# compose.yaml — sawyer-cloud top-level compose entry point.
+#
+# Pulls in the upstream AIO compose (unmodified git subtree) and our
+# overlay via `include:` so we never have to fork upstream/compose.yaml.
+# This file is intentionally tiny; everything customer-specific lives in
+# the overlay and in customization/customers/<n>/.
+#
+# Usage:
+#     CUSTOMER_NAME=<slug> CUSTOMER_FLAVOR=<flavor> \
+#     MGMT_SERVER_URL=https://mgmt.example.com \
+#     docker compose up -d
+#
+# Variables required at compose-time:
+#   CUSTOMER_NAME      — slug matching customization/customers/<n>/.
+#   MGMT_SERVER_URL    — management-server endpoint the agent talks to.
+#
+# Optional:
+#   CUSTOMER_FLAVOR    — default: default
+#   AIO_IMAGE_TAG      — default: latest (pins aio-base image per customer).
+#   DEPLOYMENT_MODE    — default: first-boot (first-boot | update | recover).
+#   APACHE_PORT/APACHE_IP_BINDING — reverse-proxy wiring; defaults 11000/127.0.0.1.
+#
+# See customization/overlays/docker-compose.override.yaml for the overlay
+# and scripts/bootstrap.sh for what runs after the stack is up.
+
+name: sawyer-cloud
+
+include:
+  - path:
+      - upstream/compose.yaml
+      - customization/overlays/docker-compose.override.yaml
