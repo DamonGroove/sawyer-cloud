@@ -1,0 +1,29 @@
+{
+    "aio_services_v1": [
+        {
+            "container_name": "nextcloud-aio-customer-agent",
+            "display_name": "Sawyer customer-agent",
+            "documentation": "file:///sawyer/community-containers/customer-agent/readme.md",
+            "image": "ghcr.io/sawyer-cloud/aio-base",
+            "image_tag": "%AIO_IMAGE_TAG%",
+            "restart": "unless-stopped",
+            "environment": [
+                "MGMT_SERVER_URL=%MGMT_SERVER_URL%",
+                "CUSTOMER_NAME=%CUSTOMER_NAME%",
+                "AGENT_STATE_DIR=/var/lib/customer-agent",
+                "AGENT_TICK_INTERVAL_SECONDS=%AGENT_TICK_INTERVAL_SECONDS%"
+            ],
+            "secrets": [
+                "MGMT_REGISTRATION_TOKEN"
+            ],
+            "ui_secret": "MGMT_REGISTRATION_TOKEN",
+            "volumes": [
+                {
+                    "source": "customer_agent_state",
+                    "destination": "/var/lib/customer-agent",
+                    "writeable": true
+                }
+            ]
+        }
+    ]
+}

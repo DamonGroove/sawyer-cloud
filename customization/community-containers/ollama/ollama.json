@@ -1,0 +1,29 @@
+{
+    "aio_services_v1": [
+        {
+            "container_name": "nextcloud-aio-ollama",
+            "display_name": "Ollama",
+            "documentation": "file:///sawyer/community-containers/ollama/readme.md",
+            "image": "ollama/ollama",
+            "image_tag": "latest",
+            "internal_port": "11434",
+            "restart": "unless-stopped",
+            "environment": [
+                "OLLAMA_HOST=0.0.0.0:11434",
+                "OLLAMA_KEEP_ALIVE=%OLLAMA_KEEP_ALIVE%",
+                "OLLAMA_NUM_PARALLEL=%OLLAMA_NUM_PARALLEL%",
+                "OLLAMA_MAX_LOADED_MODELS=%OLLAMA_MAX_LOADED_MODELS%"
+            ],
+            "volumes": [
+                {
+                    "source": "ollama_models",
+                    "destination": "/root/.ollama",
+                    "writeable": true
+                }
+            ],
+            "devices": [
+                "/dev/dri"
+            ]
+        }
+    ]
+}

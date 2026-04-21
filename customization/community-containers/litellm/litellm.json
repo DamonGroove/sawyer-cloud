@@ -1,0 +1,45 @@
+{
+    "aio_services_v1": [
+        {
+            "container_name": "nextcloud-aio-litellm",
+            "display_name": "LiteLLM proxy",
+            "documentation": "file:///sawyer/community-containers/litellm/readme.md",
+            "image": "ghcr.io/berriai/litellm",
+            "image_tag": "main-stable",
+            "internal_port": "4000",
+            "restart": "unless-stopped",
+            "environment": [
+                "LITELLM_MASTER_KEY=%LITELLM_MASTER_KEY%",
+                "LITELLM_LOG=INFO",
+                "PORT=4000",
+                "OPENAI_API_KEY=%LITELLM_OPENAI_API_KEY%",
+                "ANTHROPIC_API_KEY=%LITELLM_ANTHROPIC_API_KEY%",
+                "AWS_ACCESS_KEY_ID=%LITELLM_AWS_ACCESS_KEY_ID%",
+                "AWS_SECRET_ACCESS_KEY=%LITELLM_AWS_SECRET_ACCESS_KEY%",
+                "AWS_REGION_NAME=%LITELLM_AWS_REGION_NAME%",
+                "GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-sa.json"
+            ],
+            "secrets": [
+                "LITELLM_MASTER_KEY",
+                "LITELLM_OPENAI_API_KEY",
+                "LITELLM_ANTHROPIC_API_KEY",
+                "LITELLM_AWS_ACCESS_KEY_ID",
+                "LITELLM_AWS_SECRET_ACCESS_KEY",
+                "LITELLM_AWS_REGION_NAME"
+            ],
+            "ui_secret": "LITELLM_MASTER_KEY",
+            "volumes": [
+                {
+                    "source": "litellm_config",
+                    "destination": "/app/config",
+                    "writeable": false
+                },
+                {
+                    "source": "litellm_secrets",
+                    "destination": "/secrets",
+                    "writeable": false
+                }
+            ]
+        }
+    ]
+}
