@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>branding_default</id>
+    <name>Sawyer Branding (default)</name>
+    <summary>Injects sawyer-cloud default-flavor branding JS + CSS into every Nextcloud page.</summary>
+    <description><![CDATA[
+Small, framework-free Nextcloud app used as the JS/CSS injection vehicle for
+sawyer-cloud deployments on the default flavor. Operators never edit the PHP
+side (CLAUDE.md §3.4 marks lib/ as OVERRIDE territory); JS/CSS edits land in
+js/ and css/ and ship with the base image.
+
+This app is enabled by bootstrap.sh on every deploy. Disabling it must go
+through `occ app:disable branding_default` — do not unregister scripts via
+info.xml in an upgrade.
+    ]]></description>
+    <version>0.1.0</version>
+    <licence>agpl</licence>
+    <author mail="engineering@sawyer-cloud.example">sawyer-cloud engineering</author>
+    <namespace>BrandingDefault</namespace>
+    <category>customization</category>
+    <bugs>https://github.com/sawyer-cloud/sawyer-cloud/issues</bugs>
+    <repository type="git">https://github.com/sawyer-cloud/sawyer-cloud</repository>
+    <dependencies>
+        <nextcloud min-version="30" max-version="31"/>
+    </dependencies>
+</info>

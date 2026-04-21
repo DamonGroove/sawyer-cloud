@@ -1,0 +1,21 @@
+/*
+ * customization/apps/branding-default/css/main.css
+ *
+ * App-level CSS loaded on every page (via Util::addStyle). Complements
+ * — does not replace — the flavor- and customer-level CSS applied by
+ * `occ config:app:set theming_customcss customcss` per CLAUDE.md §3.3.
+ *
+ * Kept minimal: broad visual changes belong in the flavor/custom CSS,
+ * not here, so that re-theming a flavor does not require a new app
+ * release (which would need an info.xml version bump and an upgrade).
+ */
+
+/* Body data attribute set by js/main.js; use for flavor-scoped targeting. */
+body[data-sawyer-flavor="default"] .sawyer-slogan-inline {
+    font-style: italic;
+}
+
+/* Footer slogan injected by js/main.js. */
+[data-sawyer-slogan] {
+    font-size: 0.9em;
+}
