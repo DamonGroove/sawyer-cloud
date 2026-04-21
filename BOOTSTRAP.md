@@ -104,6 +104,10 @@ Build the deployment and CI plumbing in this order. Each item is a separate comm
 18. `scripts/smoke-test/test_staging.py` + `requirements.txt`. Must pass `python3 -m py_compile`.
 19. `.github/workflows/staging-deploy.yml` — must pass `yamllint` (if available) and `actionlint` (if available).
 20. `.github/workflows/upstream-sync.yml` — same.
+21. `scripts/build-base-image.sh` — builds `ghcr.io/<org>/aio-base:<git-sha>` per `RESEARCH_REPORT.md` §6. Called by the base-image-build workflow; referenced by CLAUDE.md §5 as a locked path. Must pass `bash -n`. Do not push the image in this session.
+22. `.github/workflows/base-image-build.yml` — triggers on push to `main` that touches `scripts/Dockerfile.base`, `customization/community-containers/**`, or `customization/apps/**`. Calls `scripts/build-base-image.sh` and pushes the resulting image to `ghcr.io` on `main` only (not on PRs). Must pass `yamllint` / `actionlint` if available.
+23. `customization/overlays/Caddyfile` — per `RESEARCH_REPORT.md` §4. Placeholder suitable as a fallback reverse-proxy when Cloudflare Tunnel is not used. Tracked so operators can customize per-customer via an override.
+24. `docs/templates/cloudflared.yml.template` — the template referenced by CLAUDE.md §3.1 step 2 for new Cloudflare Tunnel setups. Tokenized placeholders (`<TUNNEL_ID>`, `<HOSTNAME>`, `<SERVICE>`).
 
 **Gate:** before Phase 2, run all validators again end-to-end. Produce a one-paragraph summary of file count, line count, what passed validation, what you couldn't validate (and why), and any open questions. Commit the branch, push if a remote is configured, and wait for engineer approval.
 
@@ -116,14 +120,15 @@ Build on branch `phase-2-mgmt-skeleton`:
 3. `management-server/app/db.py` — SQLAlchemy engine + session factory, Postgres DSN from env.
 4. `management-server/app/models/` — SQLAlchemy models for the tables in `MANAGEMENT_SERVER.md` §3. One file per table (`customers.py`, `agents.py`, `commands.py`, `audits.py`, `users.py`, `flavors.py`, `features.py`, `feature_bindings.py`, `base_images.py`).
 5. `management-server/app/auth/` — OIDC session issuance, JWT verify middleware. Stub the IdP config behind env vars; no real IdP wiring.
-6. `management-server/app/routers/` — one file per endpoint group. Implement `customers` (list, show, create), `agents` (register, tick), `commands` (get, result) fully. Stub the rest (return 501 Not Implemented with the right shape).
-7. `management-server/app/rbac.py` — the three roles from `MANAGEMENT_SERVER.md` §6, expressed as decorators. Every write endpoint is decorated.
-8. `management-server/alembic/` — initial migration that creates all tables from §3.
-9. `management-server/Dockerfile` — multi-stage; non-root; `uvicorn` as entrypoint.
-10. `management-server/compose.yaml` — dev-mode: FastAPI + Postgres + MinIO.
-11. `management-server/pyproject.toml` — dependencies pinned.
-12. `management-server/tests/` — a handful of tests: agent register happy path, customer create, RBAC denial. Use `pytest` + `httpx.AsyncClient`.
-13. `management-server/README.md` — already exists from the handoff. Verify it still reflects what you built; add a "Running locally" section at the bottom.
+6. `management-server/app/security/` — security middleware stubs referenced by CLAUDE.md §5 (locked path): `csp.py` (Content-Security-Policy header injector), `csrf.py` (double-submit cookie for cookie-authed endpoints), `ratelimit.py` (per-identity token bucket stub). Stubs must be wired into `main.py`'s middleware stack even if they no-op by default, so that later hardening has a clear insertion point.
+7. `management-server/app/routers/` — one file per endpoint group. Implement `customers` (list, show, create), `agents` (register, tick), `commands` (get, result) fully. Stub the rest (return 501 Not Implemented with the right shape).
+8. `management-server/app/rbac.py` — the three roles from `MANAGEMENT_SERVER.md` §6, expressed as decorators. Every write endpoint is decorated.
+9. `management-server/alembic/` — initial migration that creates all tables from §3.
+10. `management-server/Dockerfile` — multi-stage; non-root; `uvicorn` as entrypoint.
+11. `management-server/compose.yaml` — dev-mode: FastAPI + Postgres + MinIO.
+12. `management-server/pyproject.toml` — dependencies pinned.
+13. `management-server/tests/` — a handful of tests: agent register happy path, customer create, RBAC denial. Use `pytest` + `httpx.AsyncClient`.
+14. `management-server/README.md` — already exists from the handoff. Verify it still reflects what you built; add a "Running locally" section at the bottom.
 
 **Gate:** before Phase 3, run `pytest` and confirm the tests pass against a local compose. Produce a summary as before.
 

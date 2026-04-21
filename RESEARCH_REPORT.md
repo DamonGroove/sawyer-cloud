@@ -170,11 +170,17 @@ nextcloud-aio-private/
 ├── scripts/
 │   ├── merge-upstream.sh             # safe subtree pull + conflict check
 │   ├── bootstrap.sh                  # applied at first boot / post-deploy
-│   ├── build-base-image.sh
-│   ├── build-customer-image.sh
+│   ├── build-base-image.sh           # builds the single customer-agnostic base image
 │   ├── deploy-staging.sh
-│   └── mgmt-ctl.sh                   # thin CLI wrapper around the management server
-├── management-server/                # see §9
+│   ├── check-forbidden-paths.sh      # operator-mode guard; see CLAUDE.md §5
+│   ├── install-hooks.sh
+│   ├── apply-smb.py                  # called by bootstrap.sh for SMB mounts
+│   ├── Dockerfile.base
+│   ├── packer/                       # VM image build (qcow2/vmdk/raw)
+│   └── smoke-test/                   # post-deploy staging smoke tests
+├── management-server/                # FastAPI + Postgres + Go CLI; see §9. The operator CLI
+│                                     # `mgmt-ctl` is a single static Go binary at
+│                                     # management-server/cli/, NOT a shell wrapper in scripts/.
 ├── .github/
 │   └── workflows/
 │       ├── staging-deploy.yml
@@ -184,7 +190,9 @@ nextcloud-aio-private/
 │   ├── RESEARCH_REPORT.md            # this file
 │   ├── OPERATOR_TASKS.md
 │   ├── MERGE_PROCEDURE.md
-│   └── INCIDENT_PLAYBOOK.md
+│   ├── INCIDENT_PLAYBOOK.md
+│   └── templates/
+│       └── cloudflared.yml.template  # referenced by CLAUDE.md §3.1
 ├── CLAUDE.md                         # the IT operator gate — see §7
 ├── README.md                         # the IT operator runbook
 └── compose.yaml                      # entry point: includes upstream + overlays

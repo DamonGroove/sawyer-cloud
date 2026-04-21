@@ -53,6 +53,20 @@ mgmt-ctl
 ├── rollback <slug>             Revert to the previous image tag for this customer.
 ├── upgrade <slug> --to <tag> [--no-backup-override]
 │
+├── backups                     Backup configuration & schedule (not "run one now" — that is `backup`).
+│   ├── list <slug>             List stored backup archives with IDs, timestamps, sizes, states.
+│   ├── pause <slug>            Pause scheduled backups for this customer (server-side flag).
+│   ├── resume <slug>           Resume scheduled backups.
+│   └── set-target <slug> --type local|s3 --path <path> [--s3-bucket <b>]
+│
+├── restart <slug> [--container <name>] [--force]
+│                                Restart containers. With no `--container`, restarts all AIO
+│                                containers except the mastercontainer. With `--container
+│                                nextcloud-aio-mastercontainer --force`, performs the rarer
+│                                mastercontainer restart (requires `OVERRIDE:` in operator mode).
+├── start <slug> --container <name>
+├── stop <slug> --container <name>
+│
 ├── logs <slug>                 Tail container logs.
 │   └── --container <n> [--tail <N>] [--follow]
 │
@@ -61,6 +75,17 @@ mgmt-ctl
 │
 ├── occ <slug> <...subcommand>  Run an allow-listed occ command.
 │                                Must be on the server's occ allow-list.
+│
+├── ollama                      Operations against a customer's Ollama container (requires the
+│   │                            `ollama` community container to be enabled on the customer).
+│   ├── pull <slug> <model>     Pull a model image into the customer's Ollama cache.
+│   └── list <slug>             List models currently pulled.
+│
+├── litellm                     Operations against a customer's LiteLLM proxy container
+│   │                            (requires the `litellm` community container).
+│   ├── rotate <slug> --provider <openai|anthropic|bedrock|vertex>
+│   │                            Rotate the named provider's API key from the encrypted secret store.
+│   └── reload <slug>           Re-read `config.yaml` without restarting.
 │
 ├── images
 │   ├── list

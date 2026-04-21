@@ -195,6 +195,11 @@ The agent has a **hard-coded allow-list of command kinds**. Each kind maps to a 
 | `custom.community_containers.set` | Sets `AIO_COMMUNITY_CONTAINERS` and signals mastercontainer to restart. Validates container names against the allow-list. |
 | `custom.logs.tail` | Runs `docker logs --tail=N <container>` against a named AIO container. Returns the tail in the result payload. Size-capped. |
 | `custom.health.report` | Runs a fuller health check than heartbeat — cron status, background job queue depth, DB size. |
+| `custom.backup.set_target` | Sets the borg backup target (local path or S3 bucket) and runs a probe write. Does not trigger a backup. |
+| `custom.ollama.pull` | Pulls a named model into the customer's Ollama container cache. Arg `model` validated against a server-side allow-list of model names. Refuses if the Ollama community container is not enabled. |
+| `custom.ollama.list` | Lists models currently pulled into the customer's Ollama cache. |
+| `custom.litellm.rotate_key` | Rotates a named provider's key in the LiteLLM container's env from the customer's age-encrypted secret store. Arg `provider` restricted to `openai\|anthropic\|bedrock\|vertex`. |
+| `custom.litellm.reload` | Signals the LiteLLM container to re-read its `config.yaml` without restarting. |
 | `noop` | For testing connectivity. |
 
 Everything outside this list is a 501 from the agent. If the management server sends an unknown kind, the agent records it in its local log and reports `kind_not_supported`.
@@ -223,15 +228,21 @@ All endpoints are under `/api/v1/`. All responses are JSON. All write endpoints 
 - `GET /auth/callback` — receives the IdP callback, issues a session JWT.
 - `POST /auth/refresh` — rotates the session JWT.
 - `POST /auth/logout` — invalidates the session.
+- `GET /users/me` — returns the current identity: user id, email, roles, assigned customers. Backs `mgmt-ctl whoami`.
 
 Service accounts (for scheduled jobs, CI) use a long-lived API key issued by engineering, stored as a bcrypt hash in `users`.
 
 ### 5.2 Customers
 
 - `GET /customers` — list. Supports filters by flavor, state, has-feature.
-- `POST /customers` — onboard. Body: `{ slug, display_name, domain, flavor, site_mode }`. Returns a registration token.
+- `POST /customers` — onboard. Body: `{ slug, display_name, domain, flavor, site_mode }`. Returns a registration token. Also backs `mgmt-ctl enroll <slug>` which re-issues a new one-time registration token for an existing customer.
+- `POST /customers/{slug}/enroll` — issue a fresh one-time registration token for an already-existing customer (e.g., re-enrolling after agent cert revocation).
 - `GET /customers/{slug}` — detailed view, including current feature bindings and recent commands.
 - `PATCH /customers/{slug}` — update display name, domain, etc. Cannot change `slug`.
+- `GET /customers/compare?a=<slug>&b=<slug>` — diff two customers' feature bindings, versions, and flavor. Backs `mgmt-ctl customers diff`.
+- `POST /customers/{slug}/apply` — re-run bootstrap against a running instance. Body: `{ section?: "theming"|"apps"|"ai"|"smb"|"exchange"|"cloudflared" }` (omit for full). Enqueues `custom.bootstrap.reapply` or a section-scoped variant.
+- `POST /customers/{slug}/rollback` — revert to the previous `deployed_image_tag`. Refuses if more than one image has been deployed since the target (requires `--to` with justification).
+- `POST /customers/{slug}/occ` — passthrough for `mgmt-ctl occ`. Body: `{ subcommand: "...", args: [...] }`. Enforces the `occ` allow-list server-side before enqueueing `occ.run`.
 - `POST /customers/{slug}/decommission` — irreversible; marks state=decommissioned, revokes agent cert, purges commands.
 
 ### 5.3 Features
@@ -248,18 +259,32 @@ Service accounts (for scheduled jobs, CI) use a long-lived API key issued by eng
 - `POST /commands/{id}/cancel` — only if state=queued.
 - `POST /commands/bulk-enqueue` — for fleet operations. Body describes the kind and a selector (`{flavor: "law-firm"}` or `{slugs: [...]}`). Server expands to individual commands.
 
-### 5.5 Agent-only endpoints
+### 5.5 Agents
+
+Agent-facing (the customer-side agent is the caller; authenticates via mTLS):
 
 - `POST /agents/register` — one-time, via registration token.
 - `POST /agents/tick` — long-poll, heartbeat + command fetch.
 - `POST /agents/commands/{id}/result` — report completion.
 - `POST /agents/log` — structured agent-side log entry. Rate-limited per agent.
 
-### 5.6 Images
+Operator-facing (authenticated as user/service account):
+
+- `GET /agents?customer=<slug>` — list agents with their last-seen timestamps and cert expiries. Backs `mgmt-ctl agents list`.
+- `POST /agents/{slug}/rotate` — issue a fresh mTLS cert and signal the agent to pick it up on next tick. Backs `mgmt-ctl agents rotate`.
+- `POST /agents/{slug}/revoke` — revoke the agent cert; customer goes offline until re-enrolled. Backs `mgmt-ctl agents revoke`.
+
+### 5.6 Images, upgrades, backups
 
 - `GET /images` — list of `base_images`.
+- `GET /images/{tag}` — single image metadata: build timestamp, commit SHA, dependency SBOM pointer, promotion history. Backs `mgmt-ctl images show`.
 - `POST /images/{tag}/promote` — mark tag as `staging-green` or `production`. Engineering-role only.
 - `POST /customers/{slug}/upgrade` — enqueue `aio.image.upgrade` to a named tag. Enforces "target ≥ current" and "backup within last 24h exists."
+- `GET /customers/{slug}/backups` — list stored borg archives with IDs, timestamps, sizes, states. Backs `mgmt-ctl backups list`.
+- `POST /customers/{slug}/backups` — enqueue `aio.backup.now`. Body: `{ label?: string }`. Backs `mgmt-ctl backup`.
+- `POST /customers/{slug}/backups/{id}/restore` — enqueue a restore from the named archive. Irreversible — server requires an `X-Confirm: restore-overwrites-state` header. Backs `mgmt-ctl restore`.
+- `POST /customers/{slug}/backups/pause` / `/resume` — flip the scheduled-backups flag (server-side state, no agent command enqueued). Backs `mgmt-ctl backups pause|resume`.
+- `PUT /customers/{slug}/backups/target` — set the backup target. Body `{ type: "local"|"s3", path?: string, s3_bucket?: string }`. Enqueues `custom.backup.set_target`. Backs `mgmt-ctl backups set-target`.
 
 ### 5.7 Branding
 
@@ -274,6 +299,33 @@ Service accounts (for scheduled jobs, CI) use a long-lived API key issued by eng
 ### 5.9 Audit
 
 - `GET /audits?actor=<id>&customer=<slug>&action=<prefix>&since=<ts>` — read-only query on the audit table. All operators can read, none can delete.
+- `GET /audits/export?since=<ts>&format=csv|ndjson` — streaming export, same filters as `GET /audits`. Backs `mgmt-ctl audit export`. Content-Disposition headers set appropriately.
+
+### 5.10 Break-glass
+
+Temporary privilege elevation. Two-person rule: one requests, a different engineer approves.
+
+- `POST /break-glass/request` — body `{ role: "admin"|"engineering", duration_seconds: int, reason: string }`. Creates a pending request and notifies the engineering Slack channel. Backs `mgmt-ctl break-glass request`.
+- `POST /break-glass/{id}/approve` — approves a pending request. Refuses if the approver is the requester. Backs `mgmt-ctl break-glass approve`.
+- `GET /break-glass?state=pending|active|expired` — list requests (own + any the caller can approve).
+
+### 5.11 Provider ops (Ollama, LiteLLM)
+
+- `POST /customers/{slug}/ollama/pull` — body `{ model: string }`. Enqueues `custom.ollama.pull`. Validates the model against a server-side allow-list. Backs `mgmt-ctl ollama pull`.
+- `GET /customers/{slug}/ollama/models` — enqueues `custom.ollama.list` synchronously (30s timeout) and returns the result. Backs `mgmt-ctl ollama list`.
+- `POST /customers/{slug}/litellm/rotate` — body `{ provider: "openai"|"anthropic"|"bedrock"|"vertex" }`. Enqueues `custom.litellm.rotate_key`. Backs `mgmt-ctl litellm rotate`.
+- `POST /customers/{slug}/litellm/reload` — enqueues `custom.litellm.reload`. Backs `mgmt-ctl litellm reload`.
+
+Each of these refuses with 409 if the corresponding community container (`ollama`, `litellm`) is not enabled on the customer.
+
+### 5.12 Containers (operator ops)
+
+- `POST /customers/{slug}/containers/{name}/restart` — enqueue `aio.container.restart`. Backs `mgmt-ctl restart <slug> --container <name>`.
+- `POST /customers/{slug}/containers/{name}/start` — enqueue `aio.container.start`.
+- `POST /customers/{slug}/containers/{name}/stop` — enqueue `aio.container.stop`.
+- `POST /customers/{slug}/restart` — batch: restarts all AIO containers except the mastercontainer. Backs bare `mgmt-ctl restart <slug>`.
+
+All four require the target container name (when specified) to be on the server's container-name allow-list. The mastercontainer is deliberately off the allow-list for plain `restart`; restarting it requires the `?force=true` query flag and is audited as a privileged action.
 
 ---
 

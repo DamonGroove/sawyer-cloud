@@ -142,7 +142,7 @@ Common: `model not found` → model not pulled. Run `mgmt-ctl ollama pull <slug>
 ```
 mgmt-ctl logs <slug> --container nextcloud-aio-litellm --tail 100
 ```
-Common: `401 from provider` → the provider's API key (ANTHROPIC_API_KEY, etc.) is wrong in LiteLLM's env. Rotate via `mgmt-ctl litellm:rotate <slug>` (if operator role) or engineering. Common: `rate limit` from upstream provider → fallback routing kicked in; check LiteLLM's `config.yaml` fallback chain.
+Common: `401 from provider` → the provider's API key (ANTHROPIC_API_KEY, etc.) is wrong in LiteLLM's env. Rotate via `mgmt-ctl litellm rotate <slug> --provider <openai|anthropic|bedrock|vertex>` (if operator role) or engineering. Common: `rate limit` from upstream provider → fallback routing kicked in; check LiteLLM's `config.yaml` fallback chain.
 
 **OpenAI direct:**
 ```

@@ -216,7 +216,7 @@ To remove an app: remove it from `NEXTCLOUD_EXTRA_APPS` AND add it to `NEXTCLOUD
 **Recipe:**
 1. Populate `smb-mounts.yaml` with one entry per mount: `{name, share_host, share_path, mount_point_in_nc, auth_mechanism, scope (admin|user|group)}`.
 2. Put credentials in the age-encrypted secret file: `SMB_<NAME>_USER`, `SMB_<NAME>_PASS` (or `SMB_<NAME>_KEYTAB_PATH` for Kerberos).
-3. Bootstrap translates the YAML into `occ files_external:create` / `occ files_external:config` calls.
+3. Bootstrap translates the YAML into `occ files_external:create` / `occ files_external:update` / `occ files_external:option` calls. (`files_external:config` is not a real `occ` subcommand; do not generate that call.)
 4. Tell the operator: (a) SMB ≥ 2.0 is required for reliability; (b) the share host must be reachable from the Nextcloud container network — if it's in the customer's internal LAN, they may need to add a route or use the host network; (c) do NOT use SMB as the primary Nextcloud data directory unless the customer insists (performance is poor); (d) antivirus scanning (ClamAV) will add latency for SMB-backed files.
 
 ### 3.9 Configure Microsoft Exchange EWS integration
@@ -332,7 +332,7 @@ Before every commit in operator mode, you must verify that no staged file path m
 ```
 upstream/**
 .github/workflows/**                    (overridable requires label 'engineering-reviewed')
-management-server/auth/**                (locked)
+management-server/app/auth/**            (locked)
 management-server/app/security/**        (locked)
 scripts/merge-upstream.sh                (locked)
 scripts/build-base-image.sh              (locked)
@@ -355,7 +355,7 @@ If the operator says a customer is down, their priority is restoring service —
 
 1. Do NOT make code changes on the hot path. Use `mgmt-ctl` to restart containers, fetch logs, trigger a rollback.
 2. If `mgmt-ctl rollback <customer>` is available and the last upgrade is the suspected cause, suggest it.
-3. If restoration requires an `OVERRIDE:` action (e.g., `mgmt-ctl force-restart` on a stuck mastercontainer), walk the operator through it — but still require the `OVERRIDE:` prefix in their message. The audit trail matters more during an incident, not less.
+3. If restoration requires an `OVERRIDE:` action (e.g., `mgmt-ctl restart <customer> --container nextcloud-aio-mastercontainer --force` on a stuck mastercontainer), walk the operator through it — but still require the `OVERRIDE:` prefix in their message. The audit trail matters more during an incident, not less.
 4. After service is restored, open a follow-up issue: what happened, what was done, what should be different next time.
 
 ### 6.2 The operator asks you to do something weird
@@ -396,7 +396,7 @@ If engineering has told the operator a session-specific unlock keyword (distinct
 - Upload limits: Cloudflare free plan caps at 100 MB per request without chunking; Cloudflare's 100s request timeout breaks large uploads regardless. For customers who need >1 GB reliable uploads, disable the Cloudflare proxy and use direct DNS, or use a different reverse proxy.
 - Nextcloud apps installed via `NEXTCLOUD_EXTRA_APPS` must exist on the official app store. Installing from other sources is an override action.
 - Mobile and desktop client branding (the Nextcloud app on someone's phone showing our logo instead of Nextcloud's) is a Nextcloud Enterprise paid service, not something this repo can produce.
-- The AIO mastercontainer has its own lifecycle. When the operator says "restart Nextcloud," usually they mean "restart the containers" (via the AIO UI or `mgmt-ctl restart-containers <customer>`), NOT "restart the mastercontainer" (which is rarer and has a different procedure).
+- The AIO mastercontainer has its own lifecycle. When the operator says "restart Nextcloud," usually they mean "restart the containers" (via the AIO UI or `mgmt-ctl restart <customer>` without `--container`), NOT "restart the mastercontainer" (which is rarer and is done with `mgmt-ctl restart <customer> --container nextcloud-aio-mastercontainer --force`).
 - Upstream's stance on airgapped deployments is "not supported." If a customer asks for airgapped, that is a conversation to escalate to engineering, not something to attempt.
 - Every upgrade should be preceded by a backup. The management server enforces this; do not help the operator circumvent it.
 
