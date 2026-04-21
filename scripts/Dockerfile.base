@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1.7
+#
+# scripts/Dockerfile.base
+#
+# sawyer-cloud AIO base image — the single customer-agnostic image all
+# customer deployments pull from (per RESEARCH_REPORT.md §6). Contains no
+# customer-specific data.
+#
+# Bundles:
+#   - Upstream nextcloud/all-in-one mastercontainer (unmodified).
+#   - Our customization/community-containers/ (customer-agent, litellm,
+#     ollama, plus anything operators enable via AIO_COMMUNITY_CONTAINERS).
+#   - Our customization/apps/ (the branding-<flavor> Nextcloud apps).
+#   - Our customization/overlays/ (compose override + Caddyfile fallback).
+#   - scripts/bootstrap.sh as /usr/local/bin/bootstrap-aio.
+#   - scripts/apply-smb.py as /usr/local/bin/apply-smb.py.
+#   - management-server/cli/bin/customer-agent (built in a separate CI job;
+#     a placeholder is shipped when absent so the image still builds locally).
+#
+# Multi-stage: stage `assets` collects only the files we want in the final
+# layer so we don't copy in the whole build context (keeps the image lean
+# and the base-image-build workflow fast).
+
+# --- stage 1: asset collection ---------------------------------------------
+FROM alpine:3.20 AS assets
+
+WORKDIR /staging
+COPY customization/community-containers/ ./community-containers/
+COPY customization/apps/ ./apps/
+COPY customization/overlays/ ./overlays/
+COPY scripts/bootstrap.sh ./bin/bootstrap-aio
+COPY scripts/apply-smb.py ./bin/apply-smb.py
+
+# Best-effort include of the customer-agent binary. CI replaces this with
+# a real binary via a separate build step; local builds get a stub that
+# exits 1 so deploys see a clear failure if the real binary never landed.
+RUN mkdir -p /staging/bin && \
+    printf '#!/bin/sh\necho "customer-agent: placeholder binary; CI must replace before prod deploy" >&2\nexit 1\n' \
+        > /staging/bin/customer-agent && \
+    chmod 0755 /staging/bin/customer-agent /staging/bin/bootstrap-aio /staging/bin/apply-smb.py
+
+# --- stage 2: final base image ---------------------------------------------
+ARG AIO_VERSION=latest
+FROM ghcr.io/nextcloud-releases/all-in-one:${AIO_VERSION} AS base
+
+ARG BUILD_SHA=dev
+ARG BUILD_DATE=unknown
+ARG AIO_VERSION
+
+LABEL org.opencontainers.image.title="sawyer-cloud aio-base" \
+      org.opencontainers.image.description="Nextcloud AIO mastercontainer + sawyer-cloud customizations." \
+      org.opencontainers.image.revision="${BUILD_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.base.name="ghcr.io/nextcloud-releases/all-in-one:${AIO_VERSION}" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      sawyer.aio.version="${AIO_VERSION}" \
+      sawyer.commit="${BUILD_SHA}"
+
+# Alpine-based upstream; we add python3/yaml/jq/curl only where we need them.
+# Keep this surface small — every added apk is a CVE surface.
+USER root
+RUN apk add --no-cache \
+        bash \
+        python3 \
+        py3-yaml \
+        curl \
+        jq \
+    && rm -rf /var/cache/apk/*
+
+# Pull staged customization artifacts from stage 1.
+COPY --from=assets /staging/community-containers/ /var/www/docker-aio/community-containers/
+COPY --from=assets /staging/apps/                  /sawyer/apps/
+COPY --from=assets /staging/overlays/              /sawyer/overlays/
+COPY --from=assets /staging/bin/bootstrap-aio      /usr/local/bin/bootstrap-aio
+COPY --from=assets /staging/bin/apply-smb.py       /usr/local/bin/apply-smb.py
+COPY --from=assets /staging/bin/customer-agent     /usr/local/bin/customer-agent
+
+# Permissions are already 0755 from the staging layer; re-assert to be
+# resilient to future copy-quirks.
+RUN chmod 0755 /usr/local/bin/bootstrap-aio /usr/local/bin/apply-smb.py /usr/local/bin/customer-agent
+
+# Upstream AIO defines its own ENTRYPOINT; we do NOT override it. bootstrap-aio
+# is invoked post-NC-ready by mgmt-ctl and by the first-boot systemd unit
+# (scripts/packer/files/first-boot.service) for VM deploys.
+# This keeps the upstream surface unchanged — any failure mode you could hit
+# on a stock AIO container, you can still hit here; we only add, never
+# replace.
+
+# Healthcheck inherits from upstream; no additional check added.
+
+# Drop privileges on exit from the customization phase. Upstream AIO may
+# need root for docker-socket orchestration, so we leave the final USER
+# unchanged from what the base image set.
