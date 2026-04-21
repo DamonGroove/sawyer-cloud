@@ -1,0 +1,59 @@
+# customization/overlays/Caddyfile
+#
+# Fallback reverse-proxy config for customers who do NOT use Cloudflare
+# Tunnel and prefer Caddy as the edge (RESEARCH_REPORT.md §4 lists this
+# as part of overlays/). Upstream AIO expects Apache-in-AIO to listen on
+# APACHE_PORT (default 11000) bound to APACHE_IP_BINDING (127.0.0.1) when
+# fronted by a reverse proxy — see upstream/reverse-proxy.md.
+#
+# Activate this Caddy container by adding `caddy` to AIO_COMMUNITY_CONTAINERS
+# in customer.env (upstream ships a `caddy` community container).
+#
+# Env interpolation: Caddy resolves {env.NAME} at startup.
+
+{
+    # Global options.
+    email {env.CADDY_ADMIN_EMAIL}
+
+    # Serve HTTP/2 and HTTP/3; disable HTTP/3 only if the upstream reverse
+    # proxy chain can't pass UDP (CLAUDE.md §8 reminder: Cloudflare Tunnel
+    # famously cannot).
+    servers {
+        protocols h1 h2 h3
+    }
+}
+
+# Redirect plain HTTP to HTTPS.
+http://{env.CUSTOMER_DOMAIN} {
+    redir https://{host}{uri} permanent
+}
+
+# Main vhost.
+https://{env.CUSTOMER_DOMAIN} {
+    # Let's Encrypt-issued cert, managed by Caddy automatically.
+    tls {env.CADDY_ADMIN_EMAIL}
+
+    # Security headers. Match upstream AIO's Apache defaults where
+    # reasonable; CLAUDE.md §4 marks removing these as locked.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "accelerometer=(), camera=(self), microphone=(self), geolocation=()"
+        # Do not advertise the reverse proxy.
+        -Server
+    }
+
+    # Pass through large upload / long-running sync requests.
+    request_body {
+        max_size {env.NEXTCLOUD_UPLOAD_LIMIT:16G}
+    }
+
+    # Proxy to the AIO Apache container.
+    reverse_proxy 127.0.0.1:{env.APACHE_PORT:11000} {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        header_up Host {host}
+    }
+}
