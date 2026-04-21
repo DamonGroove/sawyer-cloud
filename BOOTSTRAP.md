@@ -151,7 +151,7 @@ Build on branch `phase-3-cli`:
 2. Write `docs/ONBOARDING.md` — step-by-step for an engineer onboarding a new customer end-to-end (create customer folder, generate registration token, build customer image, deploy, verify).
 3. Write `docs/STAGING_SETUP.md` — how to stand up the staging Linux server the CI workflow deploys to (Docker install, secrets, first deploy).
 4. Write `docs/postmortems/README.md` — template for postmortem writeups referenced from `INCIDENT_PLAYBOOK.md`.
-5. Move **this file** (`BOOTSTRAP.md`) to `docs/BOOTSTRAP_HISTORY.md` and add a note at the top: "This file was the one-shot bootstrap instruction consumed at repo creation on <date>. It is archived for traceability; do not run it again."
+5. Move **this file** (`BOOTSTRAP.md`) to `docs/BOOTSTRAP_HISTORY.md` in a commit whose subject line begins exactly `chore: archive BOOTSTRAP.md` (CLAUDE.md §0.1 condition 3 uses this as the mode-switch marker; any other subject will leave future sessions stuck in bootstrap mode forever). Add a note at the top of the archived file: "This file was the one-shot bootstrap instruction consumed at repo creation on <date>. It is archived for traceability; do not run it again."
 6. Squash-merge phase branches into `main` in order. Tag the repo `v0.1.0-scaffold`.
 
 **Gate:** summarize the final state. Count: files, lines, validators passed, tests passing. List open TODOs. Hand back to engineer.

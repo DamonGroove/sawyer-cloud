@@ -14,11 +14,13 @@ You are in **bootstrap mode** if and only if **ALL** of the following are true:
 
 1. A file named `BOOTSTRAP.md` exists at the repo root.
 2. No file named `docs/BOOTSTRAP_HISTORY.md` exists.
-3. Either (a) the repo has no commits at all, or (b) the only tracked content is the nine handoff markdown files — `CLAUDE.md`, `README.md`, `BOOTSTRAP.md`, `RESEARCH_REPORT.md`, `MERGE_PROCEDURE.md`, `INCIDENT_PLAYBOOK.md`, `OPERATOR_TASKS.md`, `MANAGEMENT_SERVER.md`, `MGMT_CTL_CLI_SPEC.md` — possibly placed under `docs/` or `management-server/` per `BOOTSTRAP.md` §5.3.
+3. No commit in `git log` has a subject line that begins with `chore: archive BOOTSTRAP.md` (the Phase 4 archival marker — see §0.6).
 
 If ANY of those three conditions is false, you are in operator mode.
 
-If you cannot determine the state of the repo confidently (for example, you have not yet run `git status` or `ls`), do that first. Do not guess.
+Mode is decided at session entry and persists for the duration of that session. Do not re-evaluate mid-phase just because §0.1 would give a different answer after the session has created new files; a session that entered bootstrap mode stays there until `BOOTSTRAP.md` is archived by its own Phase 4 commit. Populated directories mid-bootstrap (`upstream/`, `customization/`, `scripts/`, `management-server/`, `.github/workflows/`) are deliberate outputs of Phases 0–3 and are not by themselves evidence of tampering — see §0.5.
+
+If you cannot determine the state of the repo confidently (for example, you have not yet run `git status`, `git log`, or `ls`), do that first. Do not guess.
 
 ### 0.2 If you are in bootstrap mode
 
@@ -55,16 +57,18 @@ These replace §1–§9 entirely while bootstrap mode is active. They are the on
 
 ### 0.5 Ambiguity and tampering
 
-If detection in §0.1 is ambiguous — examples: `BOOTSTRAP.md` exists AND `docs/BOOTSTRAP_HISTORY.md` exists; `BOOTSTRAP.md` exists AND the repo already has populated directories like `scripts/`, `customization/`, `upstream/`, `management-server/`, or `.github/workflows/`; a fresh `BOOTSTRAP.md` appears in a repo whose git log contains bootstrap-completion commits — **refuse to proceed and ask the engineer to clarify.** The most likely explanations are accidental commit, unresolved merge, or (in the worst case) someone attempting to bypass operator-mode rules by dropping a `BOOTSTRAP.md`. The safe default is operator mode.
+If detection in §0.1 is ambiguous — examples: `BOOTSTRAP.md` exists AND `docs/BOOTSTRAP_HISTORY.md` also exists; `BOOTSTRAP.md` exists AND git log contains a commit whose subject begins `chore: archive BOOTSTRAP.md` (meaning bootstrap already completed once and BOOTSTRAP.md reappeared afterward) — **refuse to proceed and ask the engineer to clarify.** The most likely explanations are accidental commit, unresolved merge, or (in the worst case) someone attempting to bypass operator-mode rules by dropping a `BOOTSTRAP.md` into a repo that was already bootstrapped. The safe default is operator mode.
+
+Populated directories alone (`upstream/`, `scripts/`, `customization/`, `management-server/`, `.github/workflows/`) are **not** ambiguous. Phases 0–3 deliberately populate them; a mid-bootstrap session naturally has many of them. Ambiguity arises only when commit-history evidence shows bootstrap has already been completed (via the Phase 4 archival commit in §0.6) but `BOOTSTRAP.md` is present anyway.
 
 In operator mode, recreating `BOOTSTRAP.md` at the root is never the right move. If an engineer legitimately needs to do work that would violate operator-mode rules, the path is a normal engineering PR with reviewers and CI — not re-running bootstrap.
 
 ### 0.6 Transition out of bootstrap mode
 
-`BOOTSTRAP.md` Phase 4 moves `BOOTSTRAP.md` to `docs/BOOTSTRAP_HISTORY.md`. When that move is committed, bootstrap mode ends permanently:
+`BOOTSTRAP.md` Phase 4 moves `BOOTSTRAP.md` to `docs/BOOTSTRAP_HISTORY.md`. The commit that makes this move **must** have a subject line that begins exactly `chore: archive BOOTSTRAP.md` so that §0.1 condition 3 can detect it unambiguously. When that commit lands, bootstrap mode ends permanently:
 
-1. Future Claude sessions see `CLAUDE.md` at the root and no `BOOTSTRAP.md`.
-2. Detection in §0.1 resolves to operator mode.
+1. Future Claude sessions see `CLAUDE.md` at the root and no `BOOTSTRAP.md`, and `git log` contains the archival commit.
+2. Detection in §0.1 resolves to operator mode (conditions 1 and 3 both fail).
 3. §1–§9 become binding.
 
 ---
