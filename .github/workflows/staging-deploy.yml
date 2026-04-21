@@ -1,0 +1,76 @@
+name: Staging deploy
+
+# Runs after Base image build completes successfully on main, or manually
+# on demand. Never runs on PRs (the staging host is shared state; use
+# workflow_dispatch with a deliberate tag for ad-hoc testing).
+on:
+  workflow_run:
+    workflows: ["Base image build"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to deploy (default = commit SHA)
+        required: false
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Only run if the upstream workflow succeeded (workflow_run doesn't
+    # filter on conclusion by default).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+    env:
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # deploy-staging.sh on the staging host needs the full checkout
+          # to rsync artifacts over; we check it out in the runner and
+          # send it via rsync-over-ssh.
+          fetch-depth: 1
+
+      - name: Install ssh key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync repo to staging
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude 'upstream/.git/' \
+            --exclude '**/__pycache__/' \
+            ./ "$STAGING_USER@$STAGING_HOST:/srv/sawyer-cloud-staging/"
+
+      - name: Run deploy-staging.sh on the host
+        run: |
+          ssh "$STAGING_USER@$STAGING_HOST" \
+            "cd /srv/sawyer-cloud-staging && IMAGE_TAG=$IMAGE_TAG STAGING_HOST=$STAGING_HOST bash scripts/deploy-staging.sh"
+
+      - name: Fetch green marker
+        run: |
+          scp "$STAGING_USER@$STAGING_HOST:/srv/sawyer-cloud-staging/.staging-green-marker" ./.staging-green-marker
+          echo "Staging green marker:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat ./.staging-green-marker >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Second job: after 48h of green staging, engineering promotes manually
+  # via `mgmt-ctl images promote <tag> --to staging-green`. We don't
+  # automate that promotion — per MERGE_PROCEDURE.md §2 step 7, human
+  # eyes on the customer state matters.
