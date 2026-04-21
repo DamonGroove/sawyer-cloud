@@ -439,3 +439,71 @@ If you're building this from scratch, the bare minimum to unblock customer rollo
 **Phase 4 (ongoing):** Break-glass flow, cert rotation automation, health history, bulk enqueue, object-store branding bundles.
 
 Do not build Phase 3 before Phase 1 has been exercised in production for two weeks. The interface lessons from real use are the ones that matter; everything else is premature design.
+
+---
+
+## 11. Running locally
+
+Zero-to-running checklist for an engineer iterating on this service.
+
+### Option A — pytest only (no Docker)
+
+```bash
+cd management-server
+make dev-install         # creates .venv, installs runtime + dev deps + aiosqlite
+make test                # 12 tests, SQLite in-memory, ~1 second
+```
+
+This is the fastest loop. Tests use `sqlite+aiosqlite:///:memory:` with
+a `StaticPool`; Postgres-specific types (`JSONB`, native `ENUM`) are
+shimmed to SQLite's `JSON` via `tests/_sqlite_compat.py`. The shape of
+the app is the same; cross-DB SQL semantics are not, so anything that
+depends on Postgres-only behavior (`ON CONFLICT`, `JSONB ?` operators)
+needs a real Postgres.
+
+### Option B — full stack with Postgres + MinIO
+
+```bash
+cd management-server
+docker compose up --build -d
+# wait ~5s for postgres to accept connections
+./.venv/bin/alembic upgrade head     # apply initial migration
+curl http://localhost:8080/health     # {"status":"ok","version":"0.1.0"}
+```
+
+Ports:
+- `8080`  FastAPI (`/health`, `/docs`, `/api/v1/*`)
+- `5432`  Postgres
+- `9000`  MinIO API
+- `9001`  MinIO console
+
+### Dev login (no real OIDC required)
+
+`ENVIRONMENT=dev` enables a `POST /api/v1/auth/dev-login` endpoint that
+mints a session JWT with arbitrary roles:
+
+```bash
+token=$(curl -s -X POST http://localhost:8080/api/v1/auth/dev-login \
+    -H 'content-type: application/json' \
+    -d '{"email":"me@example.com","roles":["engineering"]}' \
+    | jq -r .access_token)
+
+curl -H "Authorization: Bearer $token" http://localhost:8080/api/v1/users/me
+```
+
+The endpoint 404s when `ENVIRONMENT` is anything other than `dev`.
+
+### Known Phase 2 caveats
+
+- Routes fully implemented: auth/users/me + dev-login, customers
+  list/show/create/enroll/decommission, agents register/tick/log/command
+  result, commands list/get. Everything else in §5 is a 501 stub with
+  the correct response shape for client development.
+- OIDC is stubbed; there's no real IdP integration yet.
+- Break-glass flow (§5.10) is skeleton-only.
+- Object-store branding bundles (§5.7) are skeleton-only.
+- `ARRAY(String)` columns from §3 were converted to `JSON` in both the
+  ORM and the alembic migration to keep the test path portable. We lose
+  Postgres array operators; nothing currently queries into these lists
+  so the tradeoff is acceptable for Phase 2. Reverting is a single
+  migration when the query need arrives.
