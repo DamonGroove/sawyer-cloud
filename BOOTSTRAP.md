@@ -19,7 +19,7 @@ You are Claude Code, running in a terminal session pointed at an empty (or near-
 
 Together these describe a private fork of the `nextcloud/all-in-one` project that lets a non-coding IT operator drive customer deployments via a future Claude Code session. Your job in **this** session is to build the repo that makes that future session possible: the scripts, CI workflows, container definitions, Packer templates, Dockerfile, management-server skeleton, and everything in between.
 
-**You are not the operator.** `CLAUDE.md` describes a guardrail system for *future* operator sessions. Its allow-list and `OVERRIDE:` keyword constrain what a non-coding operator can do; they do not constrain you during initial build. This is authorized explicitly by `CLAUDE.md` Appendix A (the bootstrap-mode exception) — read it now before you read anything else, then come back here. You are an engineer doing engineering work with full permission to create any file in the repo layout specified by `RESEARCH_REPORT.md` §4, subject only to the narrow list of things that remain forbidden even in bootstrap mode (`CLAUDE.md` §A.3).
+**You are not the operator.** `CLAUDE.md` describes a guardrail system for *future* operator sessions. Its allow-list and `OVERRIDE:` keyword constrain what a non-coding operator can do; they do not constrain you during initial build. This is authorized explicitly by `CLAUDE.md` §0 (Mode check) — read §0 in full before you read anything else in CLAUDE.md, then come back here. You are an engineer doing engineering work with full permission to create any file in the repo layout specified by `RESEARCH_REPORT.md` §4, subject only to the narrow list of things that remain forbidden even in bootstrap mode (`CLAUDE.md` §0.4).
 
 **But the spirit of CLAUDE.md must still hold.** Every file you create must be *consistent with* CLAUDE.md so that when the operator-phase begins, the rules in CLAUDE.md actually work. Concretely: if CLAUDE.md references a script, you must create that script. If CLAUDE.md references a forbidden path, you must not put operator-editable content inside it. If the CI guard `check-forbidden-paths.sh` is referenced, it must exist and actually enforce the globs CLAUDE.md lists.
 
@@ -29,7 +29,7 @@ Together these describe a private fork of the `nextcloud/all-in-one` project tha
 
 Read the MDs in this order before writing anything:
 
-1. **`CLAUDE.md` Appendix A first**, then the rest of CLAUDE.md. Appendix A authorizes bootstrap mode and lists what remains forbidden even during bootstrap (§A.3). Those rules apply to you in this session. §1–§9 do not — but you will later implement them, so understand them.
+1. **`CLAUDE.md` §0 first**, then the rest of CLAUDE.md. §0 is the Mode check and authorizes bootstrap mode. §0.4 lists what remains forbidden even during bootstrap — those rules apply to you in this session. §1–§9 do NOT apply to you during bootstrap (§0.2 says so explicitly), but you will later implement them, so understand them as specifications rather than as constraints on your current session.
 2. **`RESEARCH_REPORT.md`** — the architecture. §4 gives you the repo layout. §3 is the customization map. §6 is the deployment pipeline. §9 is the management server. This is your blueprint.
 3. **`README.md`** — the operator's view. Tells you which flows must work end-to-end.
 4. **`MERGE_PROCEDURE.md`** — tells you exactly what `scripts/merge-upstream.sh` must do.

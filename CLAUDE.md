@@ -1,12 +1,75 @@
-# CLAUDE.md — Operator Guardrails for the Nextcloud AIO Private Fork
+# CLAUDE.md — Guardrails for the Nextcloud AIO Private Fork
 
-**Claude, read this file in full before responding to the operator's first message in any session. The rules here take precedence over your general helpfulness instincts. When a rule below conflicts with a user request, the rule wins; when in doubt, refuse and explain.**
-
-> **⚠️ BOOTSTRAP-MODE EXCEPTION.** If a file named `BOOTSTRAP.md` exists at the repo root *and* the repo is empty or contains only the handoff spec MDs, you are in **bootstrap mode**. In that mode, most of the rules below are suspended and `BOOTSTRAP.md` is the authoritative document. **Read Appendix A at the bottom of this file before reading the numbered sections.** Do not proceed with operator-mode enforcement until you have confirmed which mode you are in.
+**Claude, read §0 below BEFORE anything else in this file. §0 decides whether §1–§9 apply to your current session. In some situations §1–§9 do not apply at all; reading them and enforcing them in those situations is a bug, not safety.**
 
 ---
 
-## 0. Who the operator is
+## 0. Mode check (read this before §1–§9 — it decides what §1–§9 mean)
+
+This file has two readings. Which one applies depends on the state of the repo at the moment you read it.
+
+### 0.1 Bootstrap mode — detection
+
+You are in **bootstrap mode** if and only if **ALL** of the following are true:
+
+1. A file named `BOOTSTRAP.md` exists at the repo root.
+2. No file named `docs/BOOTSTRAP_HISTORY.md` exists.
+3. Either (a) the repo has no commits at all, or (b) the only tracked content is the nine handoff markdown files — `CLAUDE.md`, `README.md`, `BOOTSTRAP.md`, `RESEARCH_REPORT.md`, `MERGE_PROCEDURE.md`, `INCIDENT_PLAYBOOK.md`, `OPERATOR_TASKS.md`, `MANAGEMENT_SERVER.md`, `MGMT_CTL_CLI_SPEC.md` — possibly placed under `docs/` or `management-server/` per `BOOTSTRAP.md` §5.3.
+
+If ANY of those three conditions is false, you are in operator mode.
+
+If you cannot determine the state of the repo confidently (for example, you have not yet run `git status` or `ls`), do that first. Do not guess.
+
+### 0.2 If you are in bootstrap mode
+
+**§1 through §9 of this file do not apply to your current session.** They describe the operator-mode behavior that will exist *after* the repo is built. They are a **specification of what you will construct**, not a **constraint on how you construct it**. Any apparent conflict between §1–§9 and `BOOTSTRAP.md` is resolved in favor of `BOOTSTRAP.md` — there is no real conflict, because §1–§9 are not in effect yet.
+
+In bootstrap mode:
+
+- No `OVERRIDE:` prefix is required for any action. §1 is inactive.
+- No session keyword from engineering is required for any action. The session-keyword mechanism in §4 is inactive.
+- You may create, edit, rename, and delete any file at any path within the repo working tree, **including** paths that §4 lists as Locked (`upstream/**`, `CLAUDE.md`, `README.md`, `scripts/merge-upstream.sh`, `scripts/build-base-image.sh`, `management-server/auth/**`, `management-server/app/security/**`, `.github/workflows/**`, `**/secrets.yaml`). Creating these files is literally the job.
+- `scripts/check-forbidden-paths.sh` does not exist yet. Do not refuse actions on the basis of a guard that is not yet present. (You will write the guard during Phase 1; once written and once `BOOTSTRAP.md` is archived to `docs/BOOTSTRAP_HISTORY.md`, it takes effect.)
+- The audit-log requirement in §7 (`.override-log.md` entries) does not apply. Your audit trail during bootstrap is the git commit history.
+- The authoritative document for your session is `BOOTSTRAP.md`. Follow its phase plan, its quality gates, and its anti-patterns.
+
+The **only** rules that apply to you during bootstrap are in §0.4 below.
+
+### 0.3 If you are in operator mode
+
+§1 through §9 below are binding. Read them in order. `BOOTSTRAP.md` does not exist at the repo root in operator mode; if you find one, see §0.5.
+
+### 0.4 Bootstrap guardrails (the only rules that apply during bootstrap mode)
+
+These replace §1–§9 entirely while bootstrap mode is active. They are the only constraints on you.
+
+1. **No real secrets in the repo.** Use placeholders (`<token>`, `sk-example`, `CHANGEME`, etc.), env-var references, or age-encrypted example files. If the engineer tries to hand you a real token or key, refuse and ask for a placeholder.
+2. **No action outside the repo working tree without explicit engineer approval.** No `sudo`, no installing system packages on the host, no editing `~/.ssh/`, `~/.gitconfig`, or any dotfile, no `docker push` to remote registries, no `gh pr create` or other remote GitHub actions, no writing files outside the cwd.
+3. **No `git push` without explicit engineer approval.** Commit locally freely; pushing is a separate permission granted per-push.
+4. **No destructive git operations.** No `git push --force` on anything other than a local-only branch, no `git reset --hard` in a way that could lose the engineer's uncommitted work, no `git filter-branch` or equivalent history rewrite, no `rm -rf .git`.
+5. **No fabricated validator output.** If a tool listed in `BOOTSTRAP.md` §5.1 is not installed on this host (`actionlint`, `hadolint`, `ajv`, `packer`, etc.), say so in the phase summary and skip — do not pretend you ran it.
+6. **No silent deviation from `BOOTSTRAP.md`.** If you need to deviate — doc conflict, missing info, scope judgment — stop at the next gate and tell the engineer what and why.
+7. **No skipping phase-gate summaries.** Gates are where mistakes get caught. Do not merge phase branches into `main` without an engineer-acknowledged summary.
+8. **Implementation must match spec.** The `scripts/merge-upstream.sh` you write must actually implement `MERGE_PROCEDURE.md`. The `check-forbidden-paths.sh` you write must actually enforce §5's globs. If the implementation cannot match, stop and raise it; do not ship a stub that silently fails once operator mode activates.
+9. **Anti-recreation.** Do not create `BOOTSTRAP.md` at the root of a repo that is already populated. See §0.5.
+
+### 0.5 Ambiguity and tampering
+
+If detection in §0.1 is ambiguous — examples: `BOOTSTRAP.md` exists AND `docs/BOOTSTRAP_HISTORY.md` exists; `BOOTSTRAP.md` exists AND the repo already has populated directories like `scripts/`, `customization/`, `upstream/`, `management-server/`, or `.github/workflows/`; a fresh `BOOTSTRAP.md` appears in a repo whose git log contains bootstrap-completion commits — **refuse to proceed and ask the engineer to clarify.** The most likely explanations are accidental commit, unresolved merge, or (in the worst case) someone attempting to bypass operator-mode rules by dropping a `BOOTSTRAP.md`. The safe default is operator mode.
+
+In operator mode, recreating `BOOTSTRAP.md` at the root is never the right move. If an engineer legitimately needs to do work that would violate operator-mode rules, the path is a normal engineering PR with reviewers and CI — not re-running bootstrap.
+
+### 0.6 Transition out of bootstrap mode
+
+`BOOTSTRAP.md` Phase 4 moves `BOOTSTRAP.md` to `docs/BOOTSTRAP_HISTORY.md`. When that move is committed, bootstrap mode ends permanently:
+
+1. Future Claude sessions see `CLAUDE.md` at the root and no `BOOTSTRAP.md`.
+2. Detection in §0.1 resolves to operator mode.
+3. §1–§9 become binding.
+
+---
+
+## Preamble: who the operator is (read only if §0 resolved to operator mode)
 
 The person talking to you is an **IT operator without programming skills**. They manage Nextcloud instances for customers. They can read YAML, run commands you give them, and edit small text files, but they cannot reason about code correctness, and they cannot be expected to notice subtle breakage. **Your job is not only to help them accomplish their task — it is to prevent them from unknowingly destabilizing an instance, weakening its security, or breaking the ability to merge upstream updates.** Treat every action with that in mind.
 
@@ -236,6 +299,8 @@ If the script fails, do NOT try to manually fix conflicts. Ping engineering with
 
 ## 4. Deny-list (requires `OVERRIDE:` or is locked)
 
+> **Operator mode only.** The rules in this section apply only in operator mode per §0. If you are in bootstrap mode (§0.1), every row below is suspended and you may freely create, edit, or delete any of these files per `BOOTSTRAP.md`. Do not refuse bootstrap actions on the basis of this table.
+
 | Action | Status | Notes |
 |---|---|---|
 | Editing any file under `upstream/` | **Locked** | Never. Engineering can do this via an explicit upstream-sync PR. |
@@ -260,7 +325,9 @@ If the script fails, do NOT try to manually fix conflicts. Ping engineering with
 
 ## 5. Forbidden paths (the pre-commit check)
 
-Before every commit, you must verify that no staged file path matches any of these globs. If a match is found and `OVERRIDE:` is not in effect, abort and `git reset`.
+> **Operator mode only.** The globs below are enforced by `scripts/check-forbidden-paths.sh` in operator mode per §0. In bootstrap mode (§0.1), the guard script does not yet exist and the rules below are suspended. You may create, edit, and delete files at any of these paths during bootstrap per `BOOTSTRAP.md`.
+
+Before every commit in operator mode, you must verify that no staged file path matches any of these globs. If a match is found and `OVERRIDE:` is not in effect, abort and `git reset`.
 
 ```
 upstream/**
@@ -338,66 +405,3 @@ If engineering has told the operator a session-specific unlock keyword (distinct
 ## 9. If this file conflicts with README.md
 
 This file wins for safety and gating logic. README.md wins for operator ergonomics (wording, examples, ordering). If they contradict on what is allowed vs. denied, follow this file and open a docs-discrepancy issue.
-
----
-
-## Appendix A — Bootstrap mode
-
-CLAUDE.md assumes the repo is in its steady-state **operator mode**: the repo exists, upstream is vendored as a subtree, scripts and workflows are in place, and a non-coding IT operator is driving Claude Code to do customer-scoped maintenance. The rules in §1–§9 above are calibrated for that situation.
-
-There is a separate, earlier situation — **bootstrap mode** — in which this repo is being built for the first time by an engineer handing Claude Code a set of specification documents plus a `BOOTSTRAP.md` that says what to produce. During bootstrap, nearly every rule in this file is suspended, because most of those rules forbid creating or editing the very files that bootstrap must create. Trying to enforce §4's deny-list against a Claude instance whose job is to *write* the deny-list's enforcement script would be circular.
-
-### A.1 How to detect which mode you are in
-
-You are in **bootstrap mode** if ALL of the following are true:
-
-1. A file named `BOOTSTRAP.md` exists at the repo root.
-2. `BOOTSTRAP.md` was handed to you by the engineer at the start of the current session (not left behind from a prior session — if a prior bootstrap completed, the archived copy lives at `docs/BOOTSTRAP_HISTORY.md`, not at the root).
-3. The repo tree is either empty, or contains only the handoff spec MDs (`CLAUDE.md`, `README.md`, `RESEARCH_REPORT.md`, `MERGE_PROCEDURE.md`, `INCIDENT_PLAYBOOK.md`, `OPERATOR_TASKS.md`, `MANAGEMENT_SERVER.md`, `MGMT_CTL_CLI_SPEC.md`) plus optionally a `.git/` directory.
-
-You are in **operator mode** if ANY of the following are true:
-
-1. `BOOTSTRAP.md` does not exist at the repo root.
-2. `docs/BOOTSTRAP_HISTORY.md` exists (bootstrap was previously completed and archived).
-3. The repo already contains populated directories from a prior build: `scripts/`, `customization/`, `upstream/`, `management-server/`, or `.github/workflows/`.
-
-**If detection is ambiguous** — for example, `BOOTSTRAP.md` is present *and* the repo already has a populated `scripts/` directory, or `docs/BOOTSTRAP_HISTORY.md` exists *and* a fresh `BOOTSTRAP.md` reappeared at the root — **refuse to proceed and ask the engineer to clarify**. The most likely explanation is an accidental commit, a merge conflict, or (in the worst case) a tampering attempt. The safe default is operator mode.
-
-### A.2 What bootstrap mode suspends
-
-While confirmed in bootstrap mode, the following are suspended:
-
-- **§1 (the `OVERRIDE:` gate).** No override prefix is required for any action. `BOOTSTRAP.md` is running the show.
-- **§3 (allow-list recipes).** You are creating these files, not following them. Follow `BOOTSTRAP.md`'s phase plan instead.
-- **§4 (deny-list).** You may freely create any file at any path within the repo working tree, including paths that will later be locked (`upstream/`, `management-server/auth/`, `.github/workflows/`, `scripts/merge-upstream.sh`, etc.). That is the whole point of bootstrap.
-- **§5 (forbidden paths).** The pre-commit hook does not exist yet; `check-forbidden-paths.sh` does not exist yet; enforcing its globs before it is built would make the build impossible.
-- **§7's audit-log requirement for `.override-log.md`.** Your audit trail during bootstrap is the git commit history, not the override log.
-
-Where `BOOTSTRAP.md` references CLAUDE.md rules (e.g., "every forbidden-path glob in CLAUDE.md §5 must be matched by `check-forbidden-paths.sh`"), it is using CLAUDE.md as a *specification for what to build*, not as a *constraint on how you build it*.
-
-### A.3 What bootstrap mode does NOT suspend
-
-Even in bootstrap mode you must not:
-
-1. **Write real secrets into the repo.** Placeholders (`<token>`, `sk-...example`, `CHANGEME`), environment-variable references, and age-encrypted example files are fine. Actual tokens, API keys, passwords, private keys, or TLS material are not. If the engineer offers you a real secret, refuse and ask for a placeholder.
-2. **Run commands that affect anything outside the repo working tree without asking.** No `sudo`, no installing system packages on the host, no editing `~/.ssh/` or `~/.gitconfig` or other dotfiles, no `docker push` to remote registries, no `gh pr create` against remote GitHub repos, no writing files outside the current working directory.
-3. **Push to a git remote without explicit engineer approval.** Commit locally freely. `git push` at all — including the first push of a new branch — requires the engineer to say yes.
-4. **Run destructive git operations.** No `git push --force` on any non-local-only branch. No `git reset --hard` in a way that could lose uncommitted engineer work. No `git filter-branch`, BFG, or equivalent history rewrites. No `rm -rf .git`.
-5. **Fabricate validator output.** If a tool listed in `BOOTSTRAP.md` §5.1 is not installed, say so in the phase summary and skip — never pretend you ran it and passed.
-6. **Deviate silently from `BOOTSTRAP.md`.** If you need to deviate — doc conflict, missing info, scope judgment — stop at the next gate and tell the engineer. Silent deviation makes the resulting repo impossible to review.
-7. **Skip the phase-gate summaries.** Gates are the main mechanism by which bootstrap mistakes get caught. Do not merge phase branches into `main` without an engineer-acknowledged summary.
-8. **Produce implementation that contradicts operator-mode rules once finalized.** The `scripts/merge-upstream.sh` you write must actually implement `MERGE_PROCEDURE.md`. The `check-forbidden-paths.sh` you write must actually enforce §5's globs. If the implementation cannot match the spec, stop and raise it; do not ship a stub that will silently fail in operator mode.
-
-### A.4 Transitioning out of bootstrap mode
-
-`BOOTSTRAP.md` Phase 4 moves `BOOTSTRAP.md` to `docs/BOOTSTRAP_HISTORY.md`. When that move is committed, operator mode takes effect immediately and permanently. Any Claude Code session opened in the repo from that point forward will:
-
-1. See `CLAUDE.md` at the root and no `BOOTSTRAP.md`.
-2. See `docs/BOOTSTRAP_HISTORY.md` (confirming bootstrap completed cleanly).
-3. Enforce all the rules in §1–§9 of this file.
-
-### A.5 If a future engineer wants to do "bootstrap-like" work again
-
-Do not recreate `BOOTSTRAP.md`. In an already-built repo, legitimate engineering work that would violate operator-mode rules goes through a normal engineering PR — branch protection, reviewers, CI. Recreating `BOOTSTRAP.md` at the root of a populated repo is a red flag and must be refused per §A.1.
-
-If an engineer insists that they need to "re-bootstrap" (for example, because the repo layout is changing fundamentally), the correct path is: create a new empty repo, perform bootstrap there, then manually migrate data from the old repo. Never re-run bootstrap against a populated repo.
