@@ -1,0 +1,138 @@
+name: Release VM artifacts
+
+# Builds qcow2 / vmdk / raw VM images via scripts/packer/aio-base.pkr.hcl
+# and uploads them as assets on a GitHub Release. Deliberately separate
+# from the routine staging-deploy cadence — VM builds are slow (~30 min),
+# use a KVM-enabled runner, and produce GB-scale artifacts. We only run
+# them when someone explicitly asks for a VM release, not on every push.
+#
+# Triggers:
+#   - push of a tag matching `v*-vm` (so `v0.1.0` alone doesn't kick this off;
+#     you opt in by pushing `v0.1.0-vm`).
+#   - workflow_dispatch for ad-hoc rebuilds.
+#
+# Outputs land as assets on the GitHub Release for the triggering tag
+# (the release is created if it does not yet exist).
+
+on:
+  push:
+    tags:
+      - 'v*-vm'
+  workflow_dispatch:
+    inputs:
+      aio_image_tag:
+        description: ghcr.io/sawyer-cloud/aio-base tag to bake in (default latest)
+        required: false
+        default: latest
+      packer_version:
+        description: Packer version to install
+        required: false
+        default: 1.11.2
+      release_tag:
+        description: GitHub Release tag to upload to (required for workflow_dispatch)
+        required: false
+
+concurrency:
+  group: release-vm
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # needed by softprops/action-gh-release to create/update the release
+
+jobs:
+  build:
+    # `ubuntu-latest` runners have KVM available on public repos; private
+    # repos may need a self-hosted runner with /dev/kvm exposed. See
+    # docs/STAGING_SETUP.md §"Hosting the VM build" when that doc catches up.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      PACKER_VERSION: ${{ inputs.packer_version || '1.11.2' }}
+      AIO_IMAGE_TAG: ${{ inputs.aio_image_tag || 'latest' }}
+      INSTALL_DIR: ${{ github.workspace }}/.bin
+
+    steps:
+      - name: Checkout (with full history for version stamping)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
+            tag="${{ inputs.release_tag }}"
+          else
+            echo "release_tag input required for workflow_dispatch" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $tag"
+
+      - name: Install qemu + kvm tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-utils ovmf cpu-checker
+          if kvm-ok 2>&1 | grep -q "KVM acceleration can be used"; then
+            echo "KVM ok"
+          else
+            echo "KVM not available on this runner — build will fall back to TCG (slow)"
+          fi
+
+      - name: Install Packer via scripts/install-packer.sh
+        run: |
+          bash scripts/install-packer.sh
+          echo "${{ env.INSTALL_DIR }}" >> "$GITHUB_PATH"
+
+      - name: packer init
+        run: packer init scripts/packer/aio-base.pkr.hcl
+
+      - name: packer validate
+        run: packer validate scripts/packer/aio-base.pkr.hcl
+
+      - name: packer build
+        run: |
+          packer build \
+            -var "aio_image_tag=${AIO_IMAGE_TAG}" \
+            scripts/packer/aio-base.pkr.hcl
+
+      - name: List produced artifacts
+        id: artifacts
+        run: |
+          shopt -s nullglob
+          mapfile -t files < <(find scripts/packer/output-qcow2 scripts/packer/output-vmdk \
+              -maxdepth 2 -type f \( -name '*.qcow2' -o -name '*.vmdk' -o -name '*.raw' \) 2>/dev/null)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no artifacts produced under scripts/packer/output-*; failing" >&2
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          # Emit a newline-separated list via GITHUB_OUTPUT multi-line syntax.
+          {
+            echo "files<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }} (VM artifacts)
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-rc') }}
+          generate_release_notes: true
+          body: |
+            Packer-built VM artifacts for tag `${{ steps.tag.outputs.tag }}`.
+
+            Bundles: `ghcr.io/sawyer-cloud/aio-base:${{ env.AIO_IMAGE_TAG }}`
+            Packer version: `${{ env.PACKER_VERSION }}`
+
+            See [docs/ONBOARDING.md §5b](../blob/main/docs/ONBOARDING.md)
+            for how customers use these artifacts.
+          files: |
+            ${{ steps.artifacts.outputs.files }}
