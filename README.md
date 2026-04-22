@@ -8,6 +8,19 @@ This is the day-to-day playbook for the IT operator running our private Nextclou
 
 ---
 
+## First-time setup (engineering, one-time per environment)
+
+Operators can skip this section entirely — it's for the engineer bringing up a new environment (staging, production, a fresh fork).
+
+- **Staging host:** follow [`docs/STAGING_SETUP.md`](docs/STAGING_SETUP.md). Covers Docker install, SSH key, age bundle, management-server connectivity, and the first `staging-deploy` workflow run.
+- **New customer onboarding end-to-end:** [`docs/ONBOARDING.md`](docs/ONBOARDING.md). Customer folder, registration token, age secret bundle, deploy via Docker or Packer VM image, smoke verification.
+- **Upstream merges:** [`docs/MERGE_PROCEDURE.md`](docs/MERGE_PROCEDURE.md) + the weekly `.github/workflows/upstream-sync.yml` run. Never `git subtree pull` manually — use `scripts/merge-upstream.sh`.
+- **Incident response:** [`docs/INCIDENT_PLAYBOOK.md`](docs/INCIDENT_PLAYBOOK.md) for the ordered first-action checklists; [`docs/postmortems/README.md`](docs/postmortems/README.md) for the writeup template.
+- **Architecture & design:** [`docs/RESEARCH_REPORT.md`](docs/RESEARCH_REPORT.md) is the reference for why things are the way they are.
+- **Management server:** [`management-server/README.md`](management-server/README.md) for API surface, RBAC, data model. [`management-server/CLI_SPEC.md`](management-server/CLI_SPEC.md) for the `mgmt-ctl` command tree. [`management-server/cli/README.md`](management-server/cli/README.md) for how to build and run `mgmt-ctl` itself.
+
+---
+
 ## 0. Setup (one-time, per operator)
 
 1. Install Claude Code per the internal IT guide.
