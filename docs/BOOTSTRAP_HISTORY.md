@@ -1,3 +1,26 @@
+# BOOTSTRAP.md — archived
+
+> **This file was the one-shot bootstrap instruction consumed at repo
+> creation on 2026-04-21. It is archived here for traceability; do not
+> run it again.**
+>
+> The commit that moved this file from the repo root (subject prefix
+> `chore: archive BOOTSTRAP.md`) is the explicit mode-switch marker
+> that CLAUDE.md §0.1(3) checks. With BOOTSTRAP.md no longer at the
+> root and this commit in history, new Claude sessions opening the repo
+> resolve §0.1 to **operator mode** and enforce §1–§9.
+>
+> If an engineer legitimately needs to do work that would violate
+> operator-mode rules, the path is an engineering PR with reviewers
+> and CI — **not** re-running this bootstrap. Re-creating `BOOTSTRAP.md`
+> at the repo root is flagged as tampering per CLAUDE.md §0.5.
+
+---
+
+*What follows is the original content, unchanged.*
+
+---
+
 # BOOTSTRAP.md — Instructions for Claude Code
 
 **Read this file first. It is the only one that tells you what to do right now. Every other MD in this handoff tells you what the finished system should look like.**
