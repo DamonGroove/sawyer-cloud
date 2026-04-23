@@ -1,0 +1,47 @@
+# --- secrets ---
+# Plaintext secrets must never be committed. .age-encrypted files ARE tracked
+# (see CLAUDE.md §3.8); private age keys live outside the repo.
+*.secret
+*.secret.decrypted
+**/secrets.yaml
+.env.local
+.env.personal
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- go ---
+/management-server/cli/bin/
+*.test
+
+# --- build / deploy artifacts ---
+/dist/
+/build/
+/packer_cache/
+*.qcow2
+*.vmdk
+*.raw
+*.box
+
+# --- tooling state ---
+node_modules/
+
+# --- editor / os ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- local overrides ---
+/compose.override.local.yaml
+/.override-log.local.md

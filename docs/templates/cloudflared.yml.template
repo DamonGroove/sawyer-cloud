@@ -1,0 +1,44 @@
+# docs/templates/cloudflared.yml.template
+#
+# Template for customization/customers/<n>/cloudflared.yml, used when a
+# customer opts into Cloudflare Tunnel (CLAUDE.md §3.1 recipe step 2).
+#
+# Copy this to the customer folder and fill in the placeholders:
+#   <TUNNEL_ID>   — UUID of the Cloudflare Tunnel (from the dashboard or
+#                   `cloudflared tunnel create <name>` output).
+#   <HOSTNAME>    — the customer's FQDN, e.g. cloud.acme.example.com.
+#   <SERVICE>     — http://localhost:11000 (AIO's Apache container, which
+#                   is reverse-proxy mode). Match customer.env APACHE_PORT.
+#
+# Also populate CLOUDFLARE_TUNNEL_TOKEN in customer.env.secret.age with
+# the token from `cloudflared tunnel token <TUNNEL_ID>`.
+#
+# Cloudflare-side hygiene (CLAUDE.md §3.1 step 4) is a dashboard action,
+# not this file:
+#   - Rocket Loader: OFF for this hostname.
+#   - WOPI allowlist populated if Collabora is enabled.
+#   - HTTP/3 OFF unless the customer has specifically tested it (CLAUDE.md
+#     §8 reminder: HTTP/3 through Cloudflare Tunnel is known-broken).
+#   - TLS mode: "Full (strict)" on the edge if the origin has a valid cert,
+#     else "Full" (NOT Flexible — Flexible degrades to HTTP on the origin).
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/creds.json
+
+# Optional: route only named hostnames through this tunnel.
+ingress:
+  - hostname: <HOSTNAME>
+    service: <SERVICE>
+    originRequest:
+      # Increase timeouts for large uploads and Talk signaling.
+      connectTimeout: 30s
+      tlsTimeout: 30s
+      # Upstream AIO terminates TLS internally when not in reverse-proxy mode.
+      # In reverse-proxy mode (our default), the service URL is plain HTTP
+      # and the tunnel provides TLS, so noTLSVerify is irrelevant.
+      httpHostHeader: <HOSTNAME>
+      # Keep the connection warm.
+      keepAliveTimeout: 90s
+
+  # Required fallback — Cloudflared refuses to start without one.
+  - service: http_status:404

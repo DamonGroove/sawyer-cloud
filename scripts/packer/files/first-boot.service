@@ -1,0 +1,21 @@
+[Unit]
+Description=sawyer-cloud first-boot customer bootstrap
+Documentation=file:///usr/local/bin/first-boot.sh
+# Wait for cloud-init (which delivers customer.env via NoCloud) AND
+# docker to be up before we try to start the stack.
+Requires=docker.service cloud-final.service
+After=docker.service cloud-final.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/first-boot.sh
+RemainAfterExit=yes
+# The script logs to /var/log/first-boot.sh.log; systemd journal captures
+# stdout/stderr as well.
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

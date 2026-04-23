@@ -1,0 +1,59 @@
+name: Upstream sync
+
+# Weekly squash-pull of nextcloud/all-in-one's main into upstream/.
+# Implements docs/MERGE_PROCEDURE.md §2. Runs merge-upstream.sh --ci
+# which creates upstream-sync/<date>, validates, pushes, and opens a PR.
+on:
+  schedule:
+    # Monday 07:00 UTC per MERGE_PROCEDURE.md §2 step 1.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry-run only (do not open a PR)
+        type: boolean
+        default: false
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so `git subtree pull` can resolve the previous
+          # squash-merge commit.
+          fetch-depth: 0
+
+      - name: Configure git author
+        run: |
+          git config user.name  "sawyer-cloud-bot"
+          git config user.email "sawyer-cloud-bot@users.noreply.github.com"
+
+      - name: Install gh CLI
+        run: |
+          type -p gh >/dev/null || (sudo apt-get update && sudo apt-get install -y gh)
+
+      - name: Run merge-upstream.sh
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+              bash scripts/merge-upstream.sh --dry-run
+          else
+              bash scripts/merge-upstream.sh --ci
+          fi
+
+      - name: Note on failure
+        if: failure()
+        run: |
+          echo "merge-upstream.sh failed — see docs/MERGE_PROCEDURE.md §4 for the three failure modes." >> "$GITHUB_STEP_SUMMARY"
+          echo "Do NOT manually fix conflicts. Ping engineering in #nextcloud-ops with the log." >> "$GITHUB_STEP_SUMMARY"

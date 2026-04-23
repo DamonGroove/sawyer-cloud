@@ -1,0 +1,49 @@
+/*
+ * customization/flavors/law-firm/custom.css
+ *
+ * Subdued, print-legible styling for legal-sector customers.
+ */
+
+:root {
+    --sawyer-primary: #5B2E91;
+    --sawyer-primary-ink: #ffffff;
+    --sawyer-footer-bg: #3a1e5f;
+    --sawyer-matter-accent: #8E7CC3;
+}
+
+/* Footer tint — matches firm branding when customer.env CUSTOMER_PRIMARY_COLOR overrides. */
+#body-public #footer {
+    color: var(--sawyer-primary);
+    font-variant: small-caps;
+}
+
+/* Primary action buttons */
+.primary,
+input[type="submit"].primary,
+button.primary {
+    background-color: var(--sawyer-primary);
+    border-color: var(--sawyer-primary);
+    color: var(--sawyer-primary-ink);
+}
+
+/* Deck columns (used commonly for matter-level boards) — lift the accent. */
+.board .column .header {
+    border-top: 3px solid var(--sawyer-matter-accent);
+}
+
+/*
+ * Print hygiene — law firms print Nextcloud share links onto filings
+ * occasionally; keep them legible and hide chrome.
+ */
+@media print {
+    #header,
+    #appmenu,
+    #navigation {
+        display: none !important;
+    }
+
+    body {
+        font-family: "Times New Roman", Times, serif;
+        color: #000;
+    }
+}

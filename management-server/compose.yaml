@@ -1,0 +1,69 @@
+# management-server/compose.yaml
+#
+# Dev-mode compose for local iteration on the management server.
+# Not used in production — prod runs the image built from ./Dockerfile
+# on whatever orchestration the team uses (k8s, Nomad, or a single host).
+#
+# Usage:
+#     cd management-server
+#     docker compose up --build
+
+name: sawyer-mgmt-dev
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sawyer-mgmt:dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sawyer:sawyer@postgres:5432/sawyer
+      DATABASE_URL_SYNC: postgresql+psycopg://sawyer:sawyer@postgres:5432/sawyer
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minio-admin
+      S3_SECRET_KEY: minio-admin-pw
+      S3_BUCKET: branding-bundles
+      OIDC_ISSUER: http://oidc-mock.invalid
+      OIDC_CLIENT_ID: sawyer-mgmt-dev
+      OIDC_CLIENT_SECRET: CHANGEME
+      SESSION_SECRET: CHANGEME
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "8080:8080"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sawyer
+      POSTGRES_PASSWORD: sawyer
+      POSTGRES_DB: sawyer
+    volumes:
+      - mgmt_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sawyer -d sawyer"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio-admin
+      MINIO_ROOT_PASSWORD: minio-admin-pw
+    volumes:
+      - mgmt_minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+volumes:
+  mgmt_pg:
+  mgmt_minio:

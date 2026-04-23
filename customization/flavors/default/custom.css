@@ -1,0 +1,41 @@
+/*
+ * customization/flavors/default/custom.css
+ *
+ * Default-flavor CSS. Kept deliberately small: customers that need more
+ * should override at customization/customers/<n>/custom.css, which is
+ * preferred over this file by bootstrap.sh (CLAUDE.md §3.3).
+ *
+ * Rules:
+ *   - Use CSS custom properties (--sawyer-*) for anything color-like so
+ *     customer overrides can re-theme without touching selectors.
+ *   - Do NOT hide core Nextcloud navigation; disable apps the proper way
+ *     via occ app:disable (CLAUDE.md §3.3 reminder).
+ */
+
+:root {
+    --sawyer-primary: #006AA7;
+    --sawyer-primary-ink: #ffffff;
+    --sawyer-footer-bg: #0b3a54;
+}
+
+/* Subtle footer branding; unobtrusive, print-safe. */
+#body-public #footer,
+body.dashboard #app-dashboard::after {
+    color: var(--sawyer-primary);
+}
+
+/* Primary action buttons inherit the customer primary color. */
+.primary,
+input[type="submit"].primary,
+button.primary {
+    background-color: var(--sawyer-primary);
+    border-color: var(--sawyer-primary);
+    color: var(--sawyer-primary-ink);
+}
+
+/* Link hover — respect reduced-motion and dark-mode users. */
+@media (prefers-reduced-motion: no-preference) {
+    a:hover {
+        transition: color 120ms ease-in-out;
+    }
+}

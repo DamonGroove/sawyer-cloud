@@ -1,0 +1,6 @@
+# scripts/smoke-test/requirements.txt
+# Pinned to the oldest Python 3.11+-compatible set we want to support on
+# the staging host. Update via `pip-compile`-style workflow when CVEs
+# drop or a test needs a newer API.
+
+requests==2.32.3
